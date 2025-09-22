@@ -12,13 +12,11 @@ solver_tripleclouds_lw(int ng,
 		       int nlev,
 		       const Config& config,
 		       const aArray<2,IsActive>& region_fracs, // (nlev,nreg)
-		       const aArray<2,IsActive>& od_scaling,   // (nlev,nreg-1)
 		       const aArray<3,IsActive>& u_matrix,     // (nlev+1,nreg,nreg)
 		       const aArray<3,IsActive>& v_matrix,     // (nlev+1,nreg,nreg)
-		       const aArray<2,IsActive>& od,           // (nlev,ng)
-		       const aArray<2,IsActive>& od_cloud,     // (nlev,ng)
-		       const aArray<2,IsActive>& ssa_cloud,    // (nlev,ng)
-		       const aArray<2,IsActive>& asymmetry_cloud, // (nlev,ng)
+		       const aArray<3,IsActive>& od,           // (nlev,nreg,ng)
+		       const aArray<3,IsActive>& ssa,          // (nlev,nreg,ng)
+		       const aArray<2,IsActive>& asymmetry,    // (nlev,ng)
 		       const aArray<2,IsActive>& planck_hl,    // (nlev+1,ng)
 		       const aArray<1,IsActive>& surf_emission,// (ng)
 		       const aArray<1,IsActive>& surf_albedo,  // (ng)

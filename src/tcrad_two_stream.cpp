@@ -101,6 +101,18 @@ calc_ref_trans_lw(int ng,
   }  
 }
 
+  /*
+template<bool IsActive>
+void
+calc_radiance_trans_source(int ng,
+			   int nlev,
+			   Real mu,
+			   const Config& config,
+			   const aArray<2,IsActive>& region_fracs,
+			   const aArray<2,IsActive>& planck_hl,    // (nlev+1,ng)
+  */
+
+  
 
 template
 void

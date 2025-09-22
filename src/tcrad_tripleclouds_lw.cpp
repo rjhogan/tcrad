@@ -24,13 +24,11 @@ solver_tripleclouds_lw(int ng,
 		       int nlev,
 		       const Config& config,
 		       const aArray<2,IsActive>& region_fracs, // (nlev,nreg)
-		       const aArray<2,IsActive>& od_scaling,   // (nlev,nreg-1)
 		       const aArray<3,IsActive>& u_matrix,     // (nlev+1,nreg,nreg)
 		       const aArray<3,IsActive>& v_matrix,     // (nlev+1,nreg,nreg)
-		       const aArray<2,IsActive>& od,           // (nlev,ng)
-		       const aArray<2,IsActive>& od_cloud,     // (nlev,ng)
-		       const aArray<2,IsActive>& ssa_cloud,    // (nlev,ng)
-		       const aArray<2,IsActive>& asymmetry_cloud, // (nlev,ng)
+		       const aArray<3,IsActive>& od,           // (nlev,nreg,ng)
+		       const aArray<3,IsActive>& ssa,          // (nlev,nreg,ng)
+		       const aArray<2,IsActive>& asymmetry,    // (nlev,ng)
 		       const aArray<2,IsActive>& planck_hl,    // (nlev+1,ng)
 		       const aArray<1,IsActive>& surf_emission,// (ng)
 		       const aArray<1,IsActive>& surf_albedo,  // (ng)
@@ -39,17 +37,6 @@ solver_tripleclouds_lw(int ng,
 		       aArray<3,IsActive> flux_up_top,         // (nlev,nreg,ng)
 		       aArray<3,IsActive> flux_dn_top)         // (nlev,nreg,ng)
 {
-  // Triplecluds, the clue is in the name
-  static const int NREGIONS = 3;
-
-  // Optical depth, single scattering albedo and asymmetry factor in
-  // each g-point including gas, aerosol and clouds
-  aVector<IsActive> od_total(ng), ssa_total(ng), asymmetry_total(ng);
-
-  // Modified optical depth after Tripleclouds scaling to represent
-  // cloud inhomogeneity
-  aVector<IsActive> od_cloud_new(ng);
-
   // In a clear-sky layer this will be 1, otherwise equal to NREGIONS
   //  int nreg;
 
@@ -78,18 +65,10 @@ solver_tripleclouds_lw(int ng,
   aMatrix<IsActive> total_albedo_below(NREGIONS,ng);
   aMatrix<IsActive> total_source_below(NREGIONS,ng);
 
-  // Downwelling flux below and above an interface between layers into
-  // a plane perpendicular to the direction of the sun
-  /*
-  aMatrix<IsActive> flux_dn(NREGIONS,ng);
-  aMatrix<IsActive> flux_dn_below(NREGIONS,ng);
-  aMatrix<IsActive> flux_up(NREGIONS,ng);
-  */
-  
+  // Inverse of the denominator in the geometric series representing
+  // multiple reflections between layers
   aMatrix<IsActive> inv_denom(NREGIONS,ng);
 
-  aVector<IsActive> flux_dn_cloud_top(ng);
-  
   // Identify clear-sky layers, with pseudo layers for outer space and
   // below the ground, both treated as single-region clear skies
   boolVector is_clear_sky_layer(nlev+2);
@@ -105,7 +84,7 @@ solver_tripleclouds_lw(int ng,
   // Section 2: Prepare column-specific variables and arrays
   // --------------------------------------------------------
   is_clear_sky_layer = true;
-  i_cloud_top = nlev;
+  i_cloud_top = nlev; // If no cloud this is below the surface!
   for (int jlev = 0; jlev < nlev; ++jlev) {
     if (region_fracs(jlev,0) < 1.0-config.cloud_fraction_threshold) {
       is_clear_sky_layer(jlev) = false;
@@ -118,7 +97,7 @@ solver_tripleclouds_lw(int ng,
   // --------------------------------------------------------
   // Section 3: Clear-sky calculation
   // --------------------------------------------------------
-  calc_no_scattering_transmittance_lw(ng, nlev, od(__,__),
+  calc_no_scattering_transmittance_lw(ng, nlev, od(__,0,__),
 				      planck_hl(range(0,nlev-1),__), planck_hl(range(1,nlev),__),
 				      transmittance(__,0,__), source_up(__,0,__), source_dn(__,0,__));
 
@@ -131,17 +110,7 @@ solver_tripleclouds_lw(int ng,
     if (!is_clear_sky_layer(jlev)) {
       // Cloudy sky
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-	// Add scaled cloud optical depth to clear-sky value
-	od_cloud_new = od_cloud(jlev,__) * od_scaling(jlev,jreg);
-	od_total = od(jlev,__) + od_cloud_new;
-	ssa_total = 0.0;
-	asymmetry_total = 0.0;
-	// Note that we are neglecting aerosol scattering
-	ssa_total.where(od_total > 0.0) = ssa_cloud(jlev,__)*od_cloud_new/od_total;
-	asymmetry_total.where(ssa_total > 0.0 && od_total > 0.0)
-	  = (asymmetry_cloud(jlev,__)*ssa_cloud(jlev,__)*od_cloud_new)
-	  / (ssa_total*od_total);
-	calc_ref_trans_lw(ng, od_total, ssa_total, asymmetry_total,
+	calc_ref_trans_lw(ng, od(jlev,jreg,__), ssa(jlev,jreg,__), asymmetry(jlev,__),
 			  planck_hl(jlev,__), planck_hl(jlev+1,__),
 			  reflectance(jlev,jreg,__), transmittance(jlev,jreg,__),
 			  source_up(jlev,jreg,__), source_dn(jlev,jreg,__));
@@ -244,12 +213,12 @@ solver_tripleclouds_lw(int ng,
   // at each half-level
   for (int jlev = 0; jlev < i_cloud_top; ++jlev) {
     flux_dn_base(jlev,0,__) = transmittance(jlev,0,__)*flux_dn_top(jlev,0,__) + source_dn(jlev,0,__);
-    flux_dn_top(jlev+1,0,__) = flux_dn_base(jlev,0,__);
+    // In a completely clear sky, i_cloud_top is not a valid layer
+    if (jlev < nlev-1) {
+      flux_dn_top(jlev+1,0,__) = flux_dn_base(jlev,0,__);
+    }
   }
 
-  // Save spectral fluxes at cloud top
-  flux_dn_cloud_top = flux_dn_base(i_cloud_top,0,__);
-    
   // --------------------------------------------------------
   // Section 7: Compute fluxes up to top-of-atmosphere
   // --------------------------------------------------------
@@ -274,10 +243,10 @@ solver_tripleclouds_lw(int ng,
   // Copy over downwelling spectral fluxes at top of first
   // scattering layer, using overlap matrix to translate to the
   // regions of the first layer of cloud
-  if (i_cloud_top > 0) {
+  if (i_cloud_top > 0 && i_cloud_top < nlev) {
     for (int jreg = 0; jreg < NREGIONS; ++jreg) {
       flux_dn_top(i_cloud_top,jreg,__)
-	= v_matrix(i_cloud_top,0,jreg) * flux_dn_cloud_top;
+	= v_matrix(i_cloud_top,0,jreg) * flux_dn_base(i_cloud_top-1,0,__);
     }
     // else the highest layer is cloudy, in which case
     // flux_dn_top(jlev=0,__,__) is already set to zero
@@ -292,8 +261,8 @@ solver_tripleclouds_lw(int ng,
 	  / (1.0 - reflectance(jlev,0,jg) * total_albedo(jlev+1,0,jg));
 	flux_up_base(jlev,0,jg) = total_source(jlev+1,0,jg)
 	  + flux_dn_base(jlev,0,jg)*total_albedo(jlev+1,0,jg);
-	flux_up_top(jlev,0,jg) = total_source(jlev+1,0,jg)
-	  + flux_dn_top(jlev,0,jg) * total_albedo(jlev+1,0,jg); // CHECK???!!!
+	flux_up_top(jlev,0,__) = flux_up_base(jlev,0,__) * transmittance(jlev,0,__)
+	  + source_up(jlev,0,__) + flux_dn_top(jlev,0,__) * reflectance(jlev,0,__);
       }
     }
     else {
@@ -306,20 +275,22 @@ solver_tripleclouds_lw(int ng,
 	+ source_up(jlev,__,__) + flux_dn_top(jlev,__,__) * reflectance(jlev,__,__);
     }
 
-    if (!(is_clear_sky_layer(jlev) && is_clear_sky_layer(jlev+1))) {
-      // Account for overlap rules in translating fluxes just above
-      // a layer interface to the values just below;
-      // Loop over regions in lower layer
-      for (int jreg = 0; jreg < NREGIONS; ++jreg) {
-	flux_dn_top(jlev+1,jreg,__) = v_matrix(jlev+1,0,jreg) * flux_dn_base(jlev,0,__);
-	// Loop over regions in upper layer
-	for (int jreg2 = 1; jreg2 < NREGIONS; ++jreg2) {
-	  flux_dn_top(jlev+1,jreg,__) += v_matrix(jlev+1,jreg2,jreg) * flux_dn_base(jlev,jreg2,__);
+    if (jlev < nlev-1) {
+      if (!(is_clear_sky_layer(jlev) && is_clear_sky_layer(jlev+1))) {
+	// Account for overlap rules in translating fluxes just above
+	// a layer interface to the values just below;
+	// Loop over regions in lower layer
+	for (int jreg = 0; jreg < NREGIONS; ++jreg) {
+	  flux_dn_top(jlev+1,jreg,__) = v_matrix(jlev+1,0,jreg) * flux_dn_base(jlev,0,__);
+	  // Loop over regions in upper layer
+	  for (int jreg2 = 1; jreg2 < NREGIONS; ++jreg2) {
+	    flux_dn_top(jlev+1,jreg,__) += v_matrix(jlev+1,jreg2,jreg) * flux_dn_base(jlev,jreg2,__);
+	  }
 	}
       }
-    }
-    else {
-      flux_dn_top(jlev+1,0,__) = flux_dn_base(jlev,0,__);
+      else {
+	flux_dn_top(jlev+1,0,__) = flux_dn_base(jlev,0,__);
+      }
     }
       
     // Otherwise the fluxes in each region are the same so
@@ -336,13 +307,11 @@ tcrad::solver_tripleclouds_lw<false>(int ng,
 				     int nlev,
 				     const Config& config,
 				     const aArray<2,false>& region_fracs, // (nlev,nreg)
-				     const aArray<2,false>& od_scaling,   // (nlev,nreg-1)
 				     const aArray<3,false>& u_matrix,     // (nlev+1,nreg,nreg)
 				     const aArray<3,false>& v_matrix,     // (nlev+1,nreg,nreg)
-				     const aArray<2,false>& od,           // (nlev,ng)
-				     const aArray<2,false>& od_cloud,     // (nlev,ng)
-				     const aArray<2,false>& ssa_cloud,    // (nlev,ng)
-				     const aArray<2,false>& asymmetry_cloud, // (nlev,ng)
+				     const aArray<3,false>& od,           // (nlev,nreg,ng)
+				     const aArray<3,false>& ssa,          // (nlev,nreg,ng)
+				     const aArray<2,false>& asymmetry,    // (nlev,ng)
 				     const aArray<2,false>& planck_hl,    // (nlev+1,ng)
 				     const aArray<1,false>& surf_emission,// (ng)
 				     const aArray<1,false>& surf_albedo,  // (ng)
@@ -359,13 +328,11 @@ tcrad::solver_tripleclouds_lw<true>(int ng,
 				    int nlev,
 				    const Config& config,
 				    const aArray<2,true>& region_fracs, // (nlev,nreg)
-				    const aArray<2,true>& od_scaling,   // (nlev,nreg-1)
 				    const aArray<3,true>& u_matrix,     // (nlev+1,nreg,nreg)
 				    const aArray<3,true>& v_matrix,     // (nlev+1,nreg,nreg)
-				    const aArray<2,true>& od,           // (nlev,ng)
-				    const aArray<2,true>& od_cloud,     // (nlev,ng)
-				    const aArray<2,true>& ssa_cloud,    // (nlev,ng)
-				    const aArray<2,true>& asymmetry_cloud, // (nlev,ng)
+				    const aArray<3,true>& od,           // (nlev,nreg,ng)
+				    const aArray<3,true>& ssa,          // (nlev,nreg,ng)
+				    const aArray<2,true>& asymmetry,    // (nlev,ng)
 				    const aArray<2,true>& planck_hl,    // (nlev+1,ng)
 				    const aArray<1,true>& surf_emission,// (ng)
 				    const aArray<1,true>& surf_albedo,  // (ng)
