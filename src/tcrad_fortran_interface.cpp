@@ -132,13 +132,20 @@ void calc_tc_flux(int ng,
   tcrad::calc_overlap_matrices(nlev, ncol, reg_fracs, overlap_param,
 			       u_matrix, v_matrix, cloud_fraction_threshold);
 
-  //  reg_fracs.clear();
-
   tcrad::Config config;
-  tcrad::solver_tripleclouds_lw(ng, nlev, ncol, config, reg_fracs, od_scaling,
-				u_matrix, v_matrix, od_clear, od_cloud, ssa_cloud,
-				asymmetry_cloud, planck_hl, surf_emission, surf_albedo,
-				flux_up, flux_dn);
+  Array3 flux_up_base(nlev,3,ng);
+  Array3 flux_dn_base(nlev,3,ng);
+  Array3 flux_up_top(nlev,3,ng);
+  Array3 flux_dn_top(nlev,3,ng);
+  for (int jcol = 0; jcol < ncol; ++jcol) {
+    tcrad::solver_tripleclouds_lw(ng, nlev, config, reg_fracs[jcol], od_scaling[jcol],
+				  u_matrix[jcol], v_matrix[jcol], od_clear[jcol], od_cloud[jcol], ssa_cloud[jcol],
+				  asymmetry_cloud[jcol], planck_hl[jcol], surf_emission[jcol], surf_albedo[jcol],
+				  flux_up_base, flux_dn_base, flux_up_top, flux_dn_top);
+    flux_up(jcol,range(0,nlev-1),__) = sum(flux_up_top,1);
+    flux_up(jcol,nlev,__)            = sum(flux_up_base(nlev,__,__),1);
+    flux_dn(jcol,range(0,nlev-1),__) = sum(flux_dn_top,1);
+    flux_dn(jcol,nlev,__)            = sum(flux_dn_base(nlev,__,__),1);
+  }
 }
-  
 };
