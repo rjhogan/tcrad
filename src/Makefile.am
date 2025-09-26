@@ -10,7 +10,10 @@ libTCrad_la_SOURCES = \
 	tcrad_tripleclouds_lw.cpp \
 	tcrad_tripleclouds_lw.hpp \
 	tcrad_two_stream.cpp \
-	tcrad_two_stream.hpp
+	tcrad_two_stream.hpp \
+	tcrad_radiance_propagation.cpp \
+	tcrad_radiance_propagation.hpp
+
 
 #	tcrad_adding_ica_lw.cpp \
 #	tcrad_adding_ica_lw.hpp \

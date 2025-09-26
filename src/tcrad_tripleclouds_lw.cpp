@@ -69,9 +69,9 @@ solver_tripleclouds_lw(int ng,
   // multiple reflections between layers
   aMatrix<IsActive> inv_denom(NREGIONS,ng);
 
-  // Identify clear-sky layers, with pseudo layers for outer space and
-  // below the ground, both treated as single-region clear skies
-  boolVector is_clear_sky_layer(nlev+2);
+  // Identify clear-sky layers, with pseudo layer for below the
+  // ground, treated as a single clear-sky region
+  boolVector is_clear_sky_layer(nlev+1);
 
   // Index of highest cloudy layer
   int i_cloud_top;
@@ -170,7 +170,11 @@ solver_tripleclouds_lw(int ng,
 
     // Account for cloud overlap when converting albedo below a
     // layer interface to the equivalent values just above
-    if (is_clear_sky_layer(jlev) && is_clear_sky_layer(jlev-1)) {
+    bool is_clear_above = true;
+    if (jlev > 0) {
+      is_clear_above = is_clear_sky_layer(jlev-1);
+    }
+    if (is_clear_sky_layer(jlev) && is_clear_above) {
       total_albedo(jlev,__,__) = total_albedo_below;
       total_source(jlev,__,__) = total_source_below;
     }
