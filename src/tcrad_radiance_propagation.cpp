@@ -81,8 +81,7 @@ calc_radiance_up(int ng, int nlev,
 		 aArray<1,IsActive> radiance_toa) {
   aArray<2,IsActive> radiance_base(NREGIONS,ng), radiance_top(NREGIONS,ng);
   radiance_base = radiance_up_surf;
-  for (int jlev = nlev-1; jlev <= 0; --jlev) {
-
+  for (int jlev = nlev-1; jlev >= 0; --jlev) {
     if (clear_fraction(jlev) == 1.0) {
       // Solution to Schwarzschild equation
       radiance_top(0,__) = transmittance(jlev,0,__)*radiance_base(0,__) + source(jlev,0,__);

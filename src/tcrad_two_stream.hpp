@@ -10,6 +10,7 @@ template<bool IsActive>
 void
 calc_no_scattering_transmittance_lw(int ng,
 				    int nlev,
+				    const Config& config,
 				    const aMatrix<IsActive>& od,
 				    const aMatrix<IsActive>& planck_top,
 				    const aMatrix<IsActive>& planck_bot,
@@ -20,6 +21,7 @@ calc_no_scattering_transmittance_lw(int ng,
 template<bool IsActive>
 void
 calc_ref_trans_lw(int ng,
+		  const Config& config,
 		  const aVector<IsActive>& od,
 		  const aVector<IsActive>& ssa,
 		  const aVector<IsActive>& asymmetry,

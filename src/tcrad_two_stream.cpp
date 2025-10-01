@@ -1,11 +1,59 @@
+#include <cmath>
+#include <limits>
+
 #include "tcrad_two_stream.hpp"
+#include "tcrad_config.hpp"
 
 namespace tcrad {
 
+static inline Real
+get_lw_diffusivity(TwoStreamScheme scheme)
+{
+  if (  scheme == TWO_STREAM_EDDINGTON
+      | scheme == TWO_STREAM_LEGENDRE) {
+    return 2.0;
+  }
+  else {
+    return 1.66;
+  }
+}
+
+static inline Real
+get_lw_diffusivity_cloud(TwoStreamScheme scheme)
+{
+  if (  scheme == TWO_STREAM_EDDINGTON
+      | scheme == TWO_STREAM_LEGENDRE
+      | scheme == TWO_STREAM_HYBRID
+      | scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) {
+    return 2.0;
+  }
+  else {
+    return 1.66;
+  }
+}
+
+// Precision-dependent parameters such that
+// param<Real>::OPTICAL_DEPTH_THRESHOLD always returns the correct
+// value
+template <typename Type>
+struct param {
+  static Type optical_depth_threshold() { return 1.0e-7;  }
+  static Type min_k_squared()           { return 1.0e-12; }
+};
+
+template<>
+struct param<float> {
+  static float optical_depth_threshold() { return 1.0e-4;  }
+  static float min_k_squared()           { return 1.0e-6; }
+};
+  
+
+// For clear skies
 template<bool IsActive>
 void
 calc_no_scattering_transmittance_lw(int ng,
 				    int nlev,
+				    const Config& config,
 				    const aMatrix<IsActive>& od,
 				    const aMatrix<IsActive>& planck_top,
 				    const aMatrix<IsActive>& planck_bot,
@@ -16,12 +64,14 @@ calc_no_scattering_transmittance_lw(int ng,
   typedef typename scalar<IsActive>::type aScalar;
   aScalar coeff, coeff_up_top, coeff_up_bot, coeff_dn_top, coeff_dn_bot;
 
-  transmittance = exp(-LW_DIFFUSIVITY*od);
+  const Real lw_diffusivity = get_lw_diffusivity(config.i_two_stream_scheme);
+  
+  transmittance = exp(-lw_diffusivity*od);
   
   for (int jlev = 0; jlev < nlev; ++jlev) {
     for (int jg = 0; jg < ng; ++jg) {
       if (od(jlev,jg) > 1.0e-3) {
-        coeff = (planck_bot(jlev,jg)-planck_top(jlev,jg)) / (LW_DIFFUSIVITY*od(jlev,jg));
+        coeff = (planck_bot(jlev,jg)-planck_top(jlev,jg)) / (lw_diffusivity*od(jlev,jg));
         coeff_up_top  =  coeff + planck_top(jlev,jg);
         coeff_up_bot  =  coeff + planck_bot(jlev,jg);
         coeff_dn_top  = -coeff + planck_top(jlev,jg);
@@ -31,16 +81,18 @@ calc_no_scattering_transmittance_lw(int ng,
       }
       else {
         // Linear limit at low optical depth
-        source_up(jlev,jg) = LW_DIFFUSIVITY * od(jlev,jg) * 0.5 * (planck_top(jlev,jg)+planck_bot(jlev,jg));
+        source_up(jlev,jg) = lw_diffusivity * od(jlev,jg) * 0.5 * (planck_top(jlev,jg)+planck_bot(jlev,jg));
 	source_dn(jlev,jg) = source_up(jlev,jg);
       }
     }
   }
 }
-  
+
+  // Cloud only
 template<bool IsActive>
 void
 calc_ref_trans_lw(int ng,
+		  const Config& config,
 		  const aVector<IsActive>& od,
 		  const aVector<IsActive>& ssa,
 		  const aVector<IsActive>& asymmetry,
@@ -52,23 +104,44 @@ calc_ref_trans_lw(int ng,
 		  aVector<IsActive> source_dn)
 {
   typedef typename scalar<IsActive>::type aScalar;
-  aVector<IsActive> gamma1(ng), gamma2(ng), k_exponent(ng);
+  aVector<IsActive> gamma1(ng), gamma2(ng);
   aScalar reftrans_factor, factor;
   aScalar exponential2;
   aScalar coeff, coeff_up_top, coeff_up_bot, coeff_dn_top, coeff_dn_bot;
 
-  for (int jg = 0; jg < ng; ++jg) {
-    factor = (LW_DIFFUSIVITY * 0.5) * ssa(jg);
-    gamma1(jg) = LW_DIFFUSIVITY - factor*(1.0 + asymmetry(jg));
-    gamma2(jg) = factor * (1.0 - asymmetry(jg));
-    // Eq 18 of Meador & Weaver (1980)
-    k_exponent(jg) = sqrt(max((gamma1(jg) - gamma2(jg)) * (gamma1(jg) + gamma2(jg)), 1.0e-12));
-  } 
+  const Real lw_diffusivity = get_lw_diffusivity_cloud(config.i_two_stream_scheme);
 
+  if (config.i_two_stream_scheme == TWO_STREAM_EDDINGTON) {
+    for (int jg = 0; jg < ng; ++jg) {
+      // See Meador & Weaver (1980), Table 1; Toon et al. (1989), Table 1
+      gamma1(jg) = 1.75 - ssa(jg) * (1.0 + 0.75*asymmetry(jg));
+      gamma2(jg) = ssa(jg) * (1.0 - 0.75*asymmetry(jg) - 0.25);
+    }
+  }
+  else if (config.i_two_stream_scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) {
+    for (int jg = 0; jg < ng; ++jg) {
+      // Wiscombe-Grams backscatter fraction applied to de-scaled
+      // asymmety factor
+      factor = 0.5 * (1.0 - 0.75*asymmetry(jg)/(1.0-asymmetry(jg)));
+      gamma1(jg) = lw_diffusivity * (1.0 - ssa(jg)*(1.0-factor));
+      gamma2(jg) = lw_diffusivity * ssa(jg) * factor;
+    }
+  }
+  else { // TWO_STREAM_LEGENDRE or TWO_STREAM_ELSASSER
+    for (int jg = 0; jg < ng; ++jg) {
+      factor = (lw_diffusivity * 0.5) * ssa(jg);
+      gamma1(jg) = lw_diffusivity - factor*(1.0 + asymmetry(jg));
+      gamma2(jg) = factor * (1.0 - asymmetry(jg));
+    }
+  } 
+  // Eq 18 of Meador & Weaver (1980)
+  aVector<IsActive> k_exponent = sqrt(max((gamma1 - gamma2) * (gamma1 + gamma2),
+					  param<Real>::min_k_squared()));
+  
   aVector<IsActive> exponential = exp(-k_exponent*od);
   
   for (int jg = 0; jg < ng; ++jg) {
-    if (od(jg) > 1.0e-3) {
+    if (od(jg) > param<Real>::optical_depth_threshold()) {
       exponential2 = exponential(jg)*exponential(jg);
       reftrans_factor = 1.0 / (k_exponent(jg) + gamma1(jg) + (k_exponent(jg) - gamma1(jg))*exponential2);
       // Meador & Weaver (1980) Eq. 25
@@ -143,7 +216,10 @@ calc_radiance_source(int ng, int nlev,
   aArray<1,IsActive> gamma1(ng), gamma2(ng), exponential(ng), k_exponent(ng);
 
   typedef typename scalar<IsActive>::type aScalar;
-  aScalar p_same, p_opposite, y_both, planck_prime, x_up, x_dn, coeff, rt_factor, c1, c2, factor;
+  aScalar p_same, p_opposite, y_both, planck_prime, x_up, x_dn, coeff;
+  aScalar rt_factor, c1, c2, factor, scaling1, scaling2, one_minus_kmu;
+
+  const Real lw_diffusivity = get_lw_diffusivity_cloud(config.i_two_stream_scheme);
   
   for (int jlev = 0; jlev < nlev; ++jlev) {
     int imaxreg = 0;
@@ -156,10 +232,8 @@ calc_radiance_source(int ng, int nlev,
       planck_top(0,__)  = planck_hl(jlev,__)   * reg_fracs(jlev,0);
       planck_base(0,__) = planck_hl(jlev+1,__) * reg_fracs(jlev,0);
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-	planck_top(jreg,__)  = planck_hl(jlev,__)
-	  * (1.0 - ssa(jlev,jreg,__)) * reg_fracs(jlev,jreg);
-	planck_base(jreg,__) = planck_hl(jlev+1,__)
-	  * (1.0 - ssa(jlev,jreg,__)) * reg_fracs(jlev,jreg);
+	planck_top(jreg,__)  = planck_hl(jlev,__)   * reg_fracs(jlev,jreg);
+	planck_base(jreg,__) = planck_hl(jlev+1,__) * reg_fracs(jlev,jreg);
       }
     }
     else {
@@ -168,31 +242,80 @@ calc_radiance_source(int ng, int nlev,
       planck_base(0,__) = planck_hl(jlev+1,__);
     }
 
+    // Clear region
+    if (!source_up.empty()) {
+      for (int jg = 0; jg < ng; ++jg) {
+	if (od(jlev,0,jg) > param<Real>::optical_depth_threshold()) {
+	  planck_prime = (planck_base(0,jg)-planck_top(0,jg))
+	    / od(jlev,0,jg);
+	  source_up(jlev,0,jg) = planck_top(0,jg)
+	    - planck_base(0,jg) * transmittance(jlev,0,jg)
+	    + planck_prime*mu*(1.0 - transmittance(jlev,0,jg));
+	}
+	else {
+	  // At low optical depths the effective Planck function is
+          // half the top and bottom values, and we avoid the division
+          // by optical depth
+	  source_up(jlev,0,jg) = od(jlev,0,jg) * 0.5
+	    * (planck_base(0,jg)+planck_top(0,jg)) / mu;
+	}
+      }
+      source_up(jlev,0,__) *= (1.0/tcrad::PI);
+    }
+    if (!source_dn.empty()) {
+      for (int jg = 0; jg < ng; ++jg) {
+	if (od(jlev,0,jg) > param<Real>::optical_depth_threshold()) {
+	  planck_prime = (planck_base(0,jg)-planck_top(0,jg))
+	    / od(jlev,0,jg);
+	  source_dn(jlev,0,jg) = planck_base(0,jg)
+	    - planck_top(0,jg) * transmittance(jlev,0,jg)
+	    - planck_prime*mu*(1.0 - transmittance(jlev,0,jg));
+	}
+	else {
+	  // At low optical depths the effective Planck function is
+          // half the top and bottom values, and we avoid the division
+          // by optical depth
+	  source_dn(jlev,0,jg) = od(jlev,0,jg) * 0.5
+	    * (planck_base(0,jg)+planck_top(0,jg)) / mu;
+	}
+      }
+      source_dn(jlev,0,__) *= (1.0/tcrad::PI);
+    }
+    
     // Scattering from two-stream fluxes: loop over cloudy regions
-    for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-      if (config.i_two_stream_scheme == TWO_STREAM_ELSASSER) {
+    for (int jreg = 1; jreg <= imaxreg; ++jreg) {
+      if (config.i_two_stream_scheme == TWO_STREAM_EDDINGTON) {
 	for (int jg = 0; jg < ng; ++jg) {
-	  // See Fu et al. (1997), Eqs. 2.9 and 2.10
-	  factor = (LW_DIFFUSIVITY * 0.5) * ssa(jlev,jreg,jg);
-	  gamma1(jg) = LW_DIFFUSIVITY - factor*(1.0 + asymmetry(jlev,jg));
+	  // See Meador & Weaver (1980), Table 1; Toon et al. (1989), Table 1
+	  gamma1(jg) = 1.75 - ssa(jlev,jreg,jg) * (1.0 + 0.75*asymmetry(jlev,jg));
+	  gamma2(jg) = ssa(jlev,jreg,jg) * (1.0 - 0.75*asymmetry(jlev,jg) - 0.25);
+	}
+      }
+      else if (config.i_two_stream_scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) {
+	for (int jg = 0; jg < ng; ++jg) {
+	  // Wiscombe-Grams backscatter fraction applied to de-scaled
+	  // asymmety factor
+	  factor = 0.5 * (1.0 - 0.75*asymmetry(jlev,jg)/(1.0-asymmetry(jlev,jg)));
+	  gamma1(jg) = lw_diffusivity * (1.0 - ssa(jlev,jreg,jg)*(1.0-factor));
+	  gamma2(jg) = lw_diffusivity * ssa(jlev,jreg,jg) * factor;
+	}
+      }
+      else { // TWO_STREAM_LEGENDRE or TWO_STREAM_ELSASSER
+	for (int jg = 0; jg < ng; ++jg) {
+	  factor = (lw_diffusivity * 0.5) * ssa(jlev,jreg,jg);
+	  gamma1(jg) = lw_diffusivity - factor*(1.0 + asymmetry(jlev,jg));
 	  gamma2(jg) = factor * (1.0 - asymmetry(jlev,jg));
 	}
-      }
-      else {
-	for (int jg = 0; jg < ng; ++jg) {
-	  // See Meador & Weaver (1980), Table 1; Toon et al. (1989),
-	  // Table 1
-	  gamma1(jg) = 1.75 - ssa(jlev,jreg,jg)*(1.0 + 0.75*asymmetry(jlev,jg));
-	  gamma2(jg) = ssa(jlev,jreg,jg)*(1.0 - 0.75*asymmetry(jlev,jg)) - 0.25;
-	}
-      }
+      } 
       // Eq 18 of Meador & Weaver (1980)
-      k_exponent = sqrt(max((gamma1 - gamma2) * (gamma1 + gamma2), 1.0e-12));
+      aVector<IsActive> k_exponent = sqrt(max((gamma1 - gamma2) * (gamma1 + gamma2),
+					      param<Real>::min_k_squared()));
+      
       exponential = exp(-k_exponent*od(jlev,jreg,__));
 
       for (int jg = 0; jg < ng; ++jg) {
-	if (od(jlev,jreg,jg) > OD_THRESH) {
-	  p_same = 3.0 + asymmetry(jlev,jg) * mu * LW_INV_DIFFUSIVITY;
+	if (od(jlev,jreg,jg) > param<Real>::optical_depth_threshold()) {
+	  p_same = 3.0 * asymmetry(jlev,jg) * mu / lw_diffusivity;
 	  // Phase function from downwelling flux to upwelling
 	  // radiance (or up to down)
 	  p_opposite = 1.0 - p_same;
@@ -200,22 +323,8 @@ calc_radiance_source(int ng, int nlev,
 	  // (or down to down)
 	  p_same += 1.0;
 
-	  y_both = LW_DIFFUSIVITY * (1.0 * ssa(jlev,jreg,jg))
-	    / (k_exponent(jg)*k_exponent(jg));
 	  planck_prime = (planck_base(jreg,jg)-planck_top(jreg,jg))
 	    / od(jlev,jreg,jg);
-	  x_up = y_both * ((gamma1(jg)+gamma2(jg))*planck_top(jreg,jg) + planck_prime);
-	  x_dn = y_both * ((gamma1(jg)+gamma2(jg))*planck_top(jreg,jg) - planck_prime);
-	  y_both *= (gamma1(jg)+gamma2(jg))*planck_prime;
-	  
-	  source_up(jlev,jreg,jg)
-	    = (0.5*ssa(jlev,jreg,jg)*(p_same*x_up + p_opposite*x_dn)
-	       + (1.0-ssa(jlev,jreg,jg))*planck_top(jreg,jg))
-	    * (1.0 - transmittance(jlev,jreg,jg))
-	    + (ssa(jlev,jreg,jg)*y_both
-	       + (1.0-ssa(jlev,jreg,jg))*planck_prime)
-	    * (mu - (mu + od(jlev,jreg,jg)*transmittance(jlev,jreg,jg)));
-
 	  coeff = planck_prime / (gamma1(jg)+gamma2(jg));
 	  rt_factor = 1.0 / (k_exponent(jg) + gamma1(jg) + (k_exponent(jg)-gamma1(jg))
 			     *exponential(jg)*exponential(jg));
@@ -225,18 +334,68 @@ calc_radiance_source(int ng, int nlev,
 	  c2 = rt_factor * (flux_dn_top(jlev,jreg,jg) - factor*flux_up_base(jlev,jreg,jg)
 			    -(planck_top(jreg,jg)-coeff) + factor*(planck_base(jreg,jg)+coeff));
 
-	  // Scaling factors...
-	  c1 = c1 * (exponential(jg) - transmittance(jlev,jreg,jg)) / (1.0 - k_exponent(jg)*mu);
-	  c2 = c2 * (1.0-exponential(jg)*transmittance(jlev,jreg,jg))/(1.0+k_exponent(jg)*mu);
-              
-	  source_up(jlev,jreg,jg) += 0.5*ssa(jlev,jreg,jg)
-	    * (p_same      * ((gamma1(jg)+k_exponent(jg))*c1 + gamma2(jg)*c2)
-	       +p_opposite * ((gamma2(jg)*c1             + (gamma1(jg)+k_exponent(jg))*c2)));
+	  // Convert to scaling factors...
+	  one_minus_kmu = 1.0 - k_exponent(jg)*mu;
+			
+	  scaling1 = (exponential(jg) - transmittance(jlev,jreg,jg))
+	    / copysign(max(abs(one_minus_kmu),std::numeric_limits<Real>::epsilon()),
+		       one_minus_kmu);
+	  scaling2 = (1.0-exponential(jg)*transmittance(jlev,jreg,jg))/(1.0+k_exponent(jg)*mu);
+
+	  if (!source_up.empty()) {
+	    source_up(jlev,jreg,jg) =
+	      // Direct emission plus scattering from the part of the
+	      // fluxes due to internal emission and having a linear
+	      // structure
+	      (1.0 - transmittance(jlev,jreg,jg))
+	      * (0.5*ssa(jlev,jreg,jg)*planck_prime*(p_same-p_opposite)
+		 /(gamma1(jg)+gamma2(jg)) + planck_prime*mu)
+	      + planck_top(jreg,jg)
+	      -planck_base(jreg,jg)*transmittance(jlev,jreg,jg)
+	      // Scattering from the exponential part of the flux,
+	      // whether caused by external or internal sources
+	      + 0.5*ssa(jlev,jreg,jg)
+	      * (p_same * ((gamma1(jg)+k_exponent(jg))*scaling1*c1
+			   + gamma2(jg)*scaling2*c2)
+		 + p_opposite * (gamma2(jg)*scaling1*c1
+				 + (gamma1(jg)+k_exponent(jg))*scaling2*c2));
+	    source_up(jlev,jreg,jg) /= tcrad::PI;
+	  }
+	  if (!source_dn.empty()) {
+	    source_dn(jlev,jreg,jg) = 
+	      // Direct emission plus scattering from the part of the
+	      // fluxes due to internal emission and having a linear
+	      // structure
+	      -(1.0 - transmittance(jlev,jreg,jg))
+	      * (0.5*ssa(jlev,jreg,jg)*planck_prime*(p_same-p_opposite)
+		 /(gamma1(jg)+gamma2(jg)) + planck_prime*mu)
+	      + planck_base(jreg,jg)
+	      -planck_top(jreg,jg)*transmittance(jlev,jreg,jg)
+	      // Scattering from the exponential part of the flux,
+	      // whether caused by external or internal sources
+	      + 0.5*ssa(jlev,jreg,jg)
+	      * (p_opposite * ((gamma1(jg)+k_exponent(jg))*scaling2*c1
+			   + gamma2(jg)*scaling1*c2)
+		 + p_same * (gamma2(jg)*scaling2*c1
+			     + (gamma1(jg)+k_exponent(jg))*scaling1*c2));
+	    source_dn(jlev,jreg,jg) /= tcrad::PI;
+	  }
 	}
-      }
-    }
-  }
-  source_dn = source_up; // Fix me!
+	else {
+	  if (!source_up.empty()) {
+	    source_up(jlev,jreg,jg) = od(jlev,jreg,jg)
+	      * 0.5 * (planck_base(jreg,jg)+planck_top(jreg,jg)) / mu;
+	    source_up(jlev,jreg,jg) /= tcrad::PI;
+	  }
+	  if (!source_dn.empty()) {
+	    source_dn(jlev,jreg,jg) = od(jlev,jreg,jg)
+	      * 0.5 * (planck_base(jreg,jg)+planck_top(jreg,jg)) / mu;
+	    source_dn(jlev,jreg,jg) /= tcrad::PI;
+	  }
+	}
+      } // Loop over jg
+    } // Loop over jreg
+  } // Loop over jlev
 }
   
   /*
@@ -256,6 +415,7 @@ template
 void
 calc_no_scattering_transmittance_lw<false>(int ng,
 					   int nlev,
+					   const Config& config,
 					   const aMatrix<false>& od,
 					   const aMatrix<false>& planck_top,
 					   const aMatrix<false>& planck_bot,
@@ -266,15 +426,16 @@ calc_no_scattering_transmittance_lw<false>(int ng,
 template
 void
 calc_ref_trans_lw<false>(int ng,
-		  const aVector<false>& od,
-		  const aVector<false>& ssa,
-		  const aVector<false>& asymmetry,
-		  const aVector<false>& planck_top,
-		  const aVector<false>& planck_bot,
-		  aVector<false> reflectance,
-		  aVector<false> transmittance,
-		  aVector<false> source_up,
-		  aVector<false> source_dn);
+			 const Config& config,
+			 const aVector<false>& od,
+			 const aVector<false>& ssa,
+			 const aVector<false>& asymmetry,
+			 const aVector<false>& planck_top,
+			 const aVector<false>& planck_bot,
+			 aVector<false> reflectance,
+			 aVector<false> transmittance,
+			 aVector<false> source_up,
+			 aVector<false> source_dn);
 
 template
 void
@@ -305,6 +466,7 @@ template
 void
 calc_no_scattering_transmittance_lw<true>(int ng,
 					  int nlev,
+					  const Config& config,
 					  const aMatrix<true>& od,
 					  const aMatrix<true>& planck_top,
 					  const aMatrix<true>& planck_bot,
@@ -316,15 +478,16 @@ calc_no_scattering_transmittance_lw<true>(int ng,
 template
 void
 calc_ref_trans_lw<true>(int ng,
-		  const aVector<true>& od,
-		  const aVector<true>& ssa,
-		  const aVector<true>& asymmetry,
-		  const aVector<true>& planck_top,
-		  const aVector<true>& planck_bot,
-		  aVector<true> reflectance,
-		  aVector<true> transmittance,
-		  aVector<true> source_up,
-		  aVector<true> source_dn);
+			const Config& config,
+			const aVector<true>& od,
+			const aVector<true>& ssa,
+			const aVector<true>& asymmetry,
+			const aVector<true>& planck_top,
+			const aVector<true>& planck_bot,
+			aVector<true> reflectance,
+			aVector<true> transmittance,
+			aVector<true> source_up,
+			aVector<true> source_dn);
 
 template
 void

@@ -17,7 +17,10 @@ namespace tcrad {
 
   typedef enum {
     TWO_STREAM_ELSASSER = 0,
-    TWO_STREAM_EDDINGTON = 1
+    TWO_STREAM_EDDINGTON,
+    TWO_STREAM_LEGENDRE,
+    TWO_STREAM_HYBRID,
+    TWO_STREAM_SCALED_WISCOMBE_GRAMS
   } TwoStreamScheme;
     
   class Config {

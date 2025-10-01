@@ -120,13 +120,6 @@ void calc_tc_flux(int ng,
   overlap_param  >>= overlap_param_in;
   flux_up        >>= flux_up_out;
   flux_dn        >>= flux_dn_out;
-  /*
-  std::cerr << "min cloud_frac = " << minval(cloud_fraction) << "\n";
-  std::cerr << "max cloud_frac = " << maxval(cloud_fraction) << "\n";
-  
-  std::cerr << "min fsd = " << minval(fractional_std) << "\n";
-  std::cerr << "max fsd = " << maxval(fractional_std) << "\n";
-  */
   tcrad::calc_region_properties(nlev, NREGIONS, ncol, cloud_fraction, fractional_std,
 				reg_fracs, od_scaling, cloud_fraction_threshold);
 
@@ -213,13 +206,6 @@ void calc_tc_radiance(int ng,
   asymmetry_cloud>>= asymmetry_cloud_in;
   overlap_param  >>= overlap_param_in;
   radiance       >>= radiance_out;
-  /*
-  std::cerr << "min cloud_frac = " << minval(cloud_fraction) << "\n";
-  std::cerr << "max cloud_frac = " << maxval(cloud_fraction) << "\n";
-  
-  std::cerr << "min fsd = " << minval(fractional_std) << "\n";
-  std::cerr << "max fsd = " << maxval(fractional_std) << "\n";
-  */
   tcrad::calc_region_properties(nlev, NREGIONS, ncol, cloud_fraction, fractional_std,
 				reg_fracs, od_scaling, cloud_fraction_threshold);
 
@@ -267,7 +253,7 @@ void calc_tc_radiance(int ng,
     Matrix radiance_up_surf(NREGIONS,ng);
     tcrad::calc_radiance_source(ng, nlev, config, mu(jcol), reg_fracs[jcol], planck_hl[jcol],
 				od, ssa, asymmetry_cloud[jcol], flux_up_base, flux_dn_top,
-				transmittance, source_dn, source_up);
+				transmittance, source_up, source_dn);
     if (config.do_specular_surface) {
       Matrix radiance_dn_surf(NREGIONS,ng);
       tcrad::calc_radiance_dn(ng, nlev, reg_fracs(jcol,__,0), transmittance,

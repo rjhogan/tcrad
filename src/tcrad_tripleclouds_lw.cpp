@@ -97,7 +97,7 @@ solver_tripleclouds_lw(int ng,
   // --------------------------------------------------------
   // Section 3: Clear-sky calculation
   // --------------------------------------------------------
-  calc_no_scattering_transmittance_lw(ng, nlev, od(__,0,__),
+  calc_no_scattering_transmittance_lw(ng, nlev, config, od(__,0,__),
 				      planck_hl(range(0,nlev-1),__), planck_hl(range(1,nlev),__),
 				      transmittance(__,0,__), source_up(__,0,__), source_dn(__,0,__));
 
@@ -110,7 +110,7 @@ solver_tripleclouds_lw(int ng,
     if (!is_clear_sky_layer(jlev)) {
       // Cloudy sky
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-	calc_ref_trans_lw(ng, od(jlev,jreg,__), ssa(jlev,jreg,__), asymmetry(jlev,__),
+	calc_ref_trans_lw(ng, config, od(jlev,jreg,__), ssa(jlev,jreg,__), asymmetry(jlev,__),
 			  planck_hl(jlev,__), planck_hl(jlev+1,__),
 			  reflectance(jlev,jreg,__), transmittance(jlev,jreg,__),
 			  source_up(jlev,jreg,__), source_dn(jlev,jreg,__));
