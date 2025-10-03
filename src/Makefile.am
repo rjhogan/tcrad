@@ -1,18 +1,22 @@
 lib_LTLIBRARIES = libTCrad.la
 libTCrad_la_SOURCES = \
 	tcrad_adept.hpp \
-	tcrad_fortran_interface.cpp \
-	tcrad_fortran_interface.hpp \
 	tcrad_overlap.cpp \
 	tcrad_overlap.hpp \
 	tcrad_regions.cpp \
 	tcrad_regions.hpp \
 	tcrad_tripleclouds_lw.cpp \
 	tcrad_tripleclouds_lw.hpp \
-	tcrad_two_stream.cpp \
-	tcrad_two_stream.hpp \
-	tcrad_radiance_propagation.cpp \
-	tcrad_radiance_propagation.hpp
+	tcrad_layer_solutions_lw.cpp \
+	tcrad_layer_solutions_lw.hpp \
+	tcrad_propagate_radiance_lw.cpp \
+	tcrad_propagate_radiance_lw.hpp \
+	tcrad_radiance_lw.cpp \
+	tcrad_radiance_lw.hpp \
+	tcrad_radiance_lw_f90.cpp \
+	tcrad_flux_lw.cpp \
+	tcrad_flux_lw.hpp \
+	tcrad_flux_lw_f90.cpp
 
 
 #	tcrad_adding_ica_lw.cpp \

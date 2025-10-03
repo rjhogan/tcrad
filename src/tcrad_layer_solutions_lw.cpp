@@ -1,16 +1,35 @@
+// tcrad_layer_solutions_lw.cpp - Solutions to longwave two-stream equations in a layer
+//
+// (C) Copyright 2014- ECMWF.
+//
+// This software is licensed under the terms of the Apache Licence Version 2.0
+// which can be obtained at http://www.apache.org/licenses/LICENSE-2.0.
+//
+// In applying this licence, ECMWF does not waive the privileges and immunities
+// granted to it by virtue of its status as an intergovernmental organisation
+// nor does it submit to any jurisdiction.
+//
+// Author:  Robin Hogan
+// Email:   r.j.hogan@ecmwf.int
+//
+// This file is adapted from ecRad's radiation_two_stream.F90
+
 #include <cmath>
 #include <limits>
 
-#include "tcrad_two_stream.hpp"
+#include "tcrad_layer_solutions_lw.hpp"
 #include "tcrad_config.hpp"
 
 namespace tcrad {
 
+// ---------------------------------------------------------------------
+// Return diffusivity factor for a particular two-stream scheme,
+// allowing for separate values between clear and cloudy layers
 static inline Real
 get_lw_diffusivity(TwoStreamScheme scheme)
 {
-  if (  scheme == TWO_STREAM_EDDINGTON
-      | scheme == TWO_STREAM_LEGENDRE) {
+  if (  (scheme == TWO_STREAM_EDDINGTON)
+      | (scheme == TWO_STREAM_LEGENDRE) ) {
     return 2.0;
   }
   else {
@@ -21,10 +40,10 @@ get_lw_diffusivity(TwoStreamScheme scheme)
 static inline Real
 get_lw_diffusivity_cloud(TwoStreamScheme scheme)
 {
-  if (  scheme == TWO_STREAM_EDDINGTON
-      | scheme == TWO_STREAM_LEGENDRE
-      | scheme == TWO_STREAM_HYBRID
-      | scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) {
+  if (  (scheme == TWO_STREAM_EDDINGTON)
+      | (scheme == TWO_STREAM_LEGENDRE)
+      | (scheme == TWO_STREAM_HYBRID)
+      | (scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) ) {
     return 2.0;
   }
   else {
@@ -32,8 +51,9 @@ get_lw_diffusivity_cloud(TwoStreamScheme scheme)
   }
 }
 
+// ---------------------------------------------------------------------
 // Precision-dependent parameters such that
-// param<Real>::OPTICAL_DEPTH_THRESHOLD always returns the correct
+// param<Real>::optical_depth_threshold() always returns the correct
 // value
 template <typename Type>
 struct param {
@@ -48,24 +68,30 @@ struct param<float> {
 };
   
 
-// For clear skies
+// ---------------------------------------------------------------------
+// Compute the longwave transmittance to diffuse radiation in the
+// no-scattering (clear-sky) case, as well as the upward flux at the
+// top and the downward flux at the base of the layer due to emission
+// from within the layer assuming a linear variation of Planck
+// function within the layer.
 template<bool IsActive>
 void
-calc_no_scattering_transmittance_lw(int ng,
-				    int nlev,
-				    const Config& config,
-				    const aMatrix<IsActive>& od,
-				    const aMatrix<IsActive>& planck_top,
-				    const aMatrix<IsActive>& planck_bot,
-  				    aMatrix<IsActive> transmittance,
-				    aMatrix<IsActive> source_up,
-				    aMatrix<IsActive> source_dn)
+calc_no_scat_trans_source_lw(int ng,
+			     int nlev,
+			     const Config& config,
+			     const Array<2,IsActive>& od,
+			     const Array<2,IsActive>& planck_top,
+			     const Array<2,IsActive>& planck_bot,
+			     Array<2,IsActive> transmittance,
+			     Array<2,IsActive> source_up,
+			     Array<2,IsActive> source_dn)
 {
-  typedef typename scalar<IsActive>::type aScalar;
-  aScalar coeff, coeff_up_top, coeff_up_bot, coeff_dn_top, coeff_dn_bot;
+  typedef typename scalar<IsActive>::type Scalar;
+  Scalar coeff, coeff_up_top, coeff_up_bot, coeff_dn_top, coeff_dn_bot;
 
   const Real lw_diffusivity = get_lw_diffusivity(config.i_two_stream_scheme);
-  
+
+  // Outside loop so can vectorize along spectral dimension
   transmittance = exp(-lw_diffusivity*od);
   
   for (int jlev = 0; jlev < nlev; ++jlev) {
@@ -88,26 +114,32 @@ calc_no_scattering_transmittance_lw(int ng,
   }
 }
 
-  // Cloud only
+// ---------------------------------------------------------------------
+// Compute the longwave reflectance and transmittance to diffuse
+// radiation using the Meador & Weaver formulas, as well as the upward
+// flux at the top and the downward flux at the base of the layer due
+// to emission from within the layer assuming a linear variation of
+// Planck function within the layer. 
 template<bool IsActive>
 void
-calc_ref_trans_lw(int ng,
-		  const Config& config,
-		  const aVector<IsActive>& od,
-		  const aVector<IsActive>& ssa,
-		  const aVector<IsActive>& asymmetry,
-		  const aVector<IsActive>& planck_top,
-		  const aVector<IsActive>& planck_bot,
-		  aVector<IsActive> reflectance,
-		  aVector<IsActive> transmittance,
-		  aVector<IsActive> source_up,
-		  aVector<IsActive> source_dn)
+calc_ref_trans_source_lw(int ng,
+			 const Config& config,
+			 const Array<1,IsActive>& od,
+			 const Array<1,IsActive>& ssa,
+			 const Array<1,IsActive>& asymmetry,
+			 const Array<1,IsActive>& planck_top,
+			 const Array<1,IsActive>& planck_bot,
+			 Array<1,IsActive> reflectance,
+			 Array<1,IsActive> transmittance,
+			 Array<1,IsActive> source_up,
+			 Array<1,IsActive> source_dn)
 {
-  typedef typename scalar<IsActive>::type aScalar;
-  aVector<IsActive> gamma1(ng), gamma2(ng);
-  aScalar reftrans_factor, factor;
-  aScalar exponential2;
-  aScalar coeff, coeff_up_top, coeff_up_bot, coeff_dn_top, coeff_dn_bot;
+  typedef typename scalar<IsActive>::type Scalar;
+  
+  Array<1,IsActive> gamma1(ng), gamma2(ng);
+  Scalar reftrans_factor, factor;
+  Scalar exponential2;
+  Scalar coeff, coeff_up_top, coeff_up_bot, coeff_dn_top, coeff_dn_bot;
 
   const Real lw_diffusivity = get_lw_diffusivity_cloud(config.i_two_stream_scheme);
 
@@ -135,10 +167,10 @@ calc_ref_trans_lw(int ng,
     }
   } 
   // Eq 18 of Meador & Weaver (1980)
-  aVector<IsActive> k_exponent = sqrt(max((gamma1 - gamma2) * (gamma1 + gamma2),
-					  param<Real>::min_k_squared()));
+  Array<1,IsActive> k_exponent = sqrt(max((gamma1 - gamma2) * (gamma1 + gamma2),
+					 param<Real>::min_k_squared()));
   
-  aVector<IsActive> exponential = exp(-k_exponent*od);
+  Array<1,IsActive> exponential = exp(-k_exponent*od);
   
   for (int jg = 0; jg < ng; ++jg) {
     if (od(jg) > param<Real>::optical_depth_threshold()) {
@@ -174,75 +206,64 @@ calc_ref_trans_lw(int ng,
   }  
 }
 
+// ---------------------------------------------------------------------
+// Compute the transmittance and source terms for a radiance
+// computation. If source_up or source_dn are empty arrays, they are
+// treated as optional arguments and not filled.
 template<bool IsActive>
 void
-calc_transmittance(int ng, int nlev,
-		   Real mu,                      // Cosine of sensor zenith angle
-		   const aArray<1,IsActive>& clear_fraction, // (nlev,NREGIONS)
-		   const aArray<3,IsActive>& od, // (nlev,NREGIONS,ng)
-		   aArray<3,IsActive> transmittance) { // (nlev,NREGIONS,ng)
-  Real minus_secant = -1.0 / std::abs(mu);
-  for (int jlev = 0; jlev < nlev; ++jlev) {
-    if (clear_fraction(jlev) == 1.0) {
-      transmittance(jlev,0,__) = exp(minus_secant * od(jlev,0,__));
-    }
-    else {
-      transmittance(jlev,__,__) = exp(minus_secant * od(jlev,__,__));
-    }
-  }
-}
+calc_radiance_trans_source_lw(int ng, int nlev,
+			      const Config& config,
+			      Real mu,
+			      const Array<2,IsActive>& region_fracs,
+			      const Array<2,IsActive>& planck_hl,
+			      const Array<3,IsActive>& od,
+			      const Array<3,IsActive>& ssa,
+			      const Array<2,IsActive>& asymmetry,
+			      const Array<3,IsActive>& flux_up_base,
+			      const Array<3,IsActive>& flux_dn_top,
+			      Array<3,IsActive> transmittance,
+			      Array<3,IsActive> source_up,
+			      Array<3,IsActive> source_dn) {
 
-template<bool IsActive>
-void
-calc_radiance_source(int ng, int nlev,
-		     const Config& config,
-		     Real mu,
-		     const aArray<2,IsActive>& reg_fracs,
-		     const aArray<2,IsActive>& planck_hl,
-		     const aArray<3,IsActive>& od,
-		     const aArray<3,IsActive>& ssa,
-		     const aArray<2,IsActive>& asymmetry,
-		     const aArray<3,IsActive>& flux_up_base,
-		     const aArray<3,IsActive>& flux_dn_top,
-		     const aArray<3,IsActive>& transmittance,
-		     aArray<3,IsActive> source_up,
-		     aArray<3,IsActive> source_dn) {
+  Array<2,IsActive> planck_top (NREGIONS,ng);
+  Array<2,IsActive> planck_base(NREGIONS,ng);
+  Array<2,IsActive> source_top (NREGIONS,ng);
+  Array<2,IsActive> source_base(NREGIONS,ng);
 
-  aArray<2,IsActive> planck_top (NREGIONS,ng);
-  aArray<2,IsActive> planck_base(NREGIONS,ng);
-  aArray<2,IsActive> source_top (NREGIONS,ng);
-  aArray<2,IsActive> source_base(NREGIONS,ng);
+  Array<1,IsActive> gamma1(ng), gamma2(ng), exponential(ng), k_exponent(ng);
 
-  aArray<1,IsActive> gamma1(ng), gamma2(ng), exponential(ng), k_exponent(ng);
-
-  typedef typename scalar<IsActive>::type aScalar;
-  aScalar p_same, p_opposite, y_both, planck_prime, x_up, x_dn, coeff;
-  aScalar rt_factor, c1, c2, factor, scaling1, scaling2, one_minus_kmu;
+  typedef typename scalar<IsActive>::type Scalar;
+  Scalar p_same, p_opposite, planck_prime, coeff;
+  Scalar rt_factor, c1, c2, factor, scaling1, scaling2, one_minus_kmu;
 
   const Real lw_diffusivity = get_lw_diffusivity_cloud(config.i_two_stream_scheme);
-  
+  const Real minus_secant = -1.0 / std::abs(mu);
+
   for (int jlev = 0; jlev < nlev; ++jlev) {
     int imaxreg = 0;
-    if (reg_fracs(jlev,0) < 1.0) {
+    if (region_fracs(jlev,0) < 1.0) {
+      // Layer contains cloud
       imaxreg = NREGIONS-1;
-    }
-    if (imaxreg > 1) {
-      // Cloudy layer: scale the Planck terms by the region fraction
-      // and also by the single-scattering co-albedo
-      planck_top(0,__)  = planck_hl(jlev,__)   * reg_fracs(jlev,0);
-      planck_base(0,__) = planck_hl(jlev+1,__) * reg_fracs(jlev,0);
+      // Transmittance of all regions
+      transmittance(jlev,__,__) = exp(minus_secant * od(jlev,__,__));
+      // Scale the Planck terms by the region fraction and also by the
+      // single-scattering co-albedo
+      planck_top(0,__)  = planck_hl(jlev,__)   * region_fracs(jlev,0);
+      planck_base(0,__) = planck_hl(jlev+1,__) * region_fracs(jlev,0);
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-	planck_top(jreg,__)  = planck_hl(jlev,__)   * reg_fracs(jlev,jreg);
-	planck_base(jreg,__) = planck_hl(jlev+1,__) * reg_fracs(jlev,jreg);
+	planck_top(jreg,__)  = planck_hl(jlev,__)   * region_fracs(jlev,jreg);
+	planck_base(jreg,__) = planck_hl(jlev+1,__) * region_fracs(jlev,jreg);
       }
     }
     else {
-      // Clear layer
+      // Clear layer: transmittance of only the clear region
+      transmittance(jlev,0,__) = exp(minus_secant * od(jlev,0,__));
       planck_top(0,__)  = planck_hl(jlev,__);
       planck_base(0,__) = planck_hl(jlev+1,__);
     }
 
-    // Clear region
+    // Compute the sources of the clear region
     if (!source_up.empty()) {
       for (int jg = 0; jg < ng; ++jg) {
 	if (od(jlev,0,jg) > param<Real>::optical_depth_threshold()) {
@@ -308,8 +329,8 @@ calc_radiance_source(int ng, int nlev,
 	}
       } 
       // Eq 18 of Meador & Weaver (1980)
-      aVector<IsActive> k_exponent = sqrt(max((gamma1 - gamma2) * (gamma1 + gamma2),
-					      param<Real>::min_k_squared()));
+      k_exponent = sqrt(max((gamma1 - gamma2) * (gamma1 + gamma2),
+			    param<Real>::min_k_squared()));
       
       exponential = exp(-k_exponent*od(jlev,jreg,__));
 
@@ -397,125 +418,96 @@ calc_radiance_source(int ng, int nlev,
     } // Loop over jreg
   } // Loop over jlev
 }
-  
-  /*
-template<bool IsActive>
-void
-calc_radiance_trans_source(int ng,
-			   int nlev,
-			   Real mu,
-			   const Config& config,
-			   const aArray<2,IsActive>& region_fracs,
-			   const aArray<2,IsActive>& planck_hl,    // (nlev+1,ng)
-  */
 
-  
 
 template
 void
-calc_no_scattering_transmittance_lw<false>(int ng,
-					   int nlev,
-					   const Config& config,
-					   const aMatrix<false>& od,
-					   const aMatrix<false>& planck_top,
-					   const aMatrix<false>& planck_bot,
-					   aMatrix<false> transmittance,
-					   aMatrix<false> source_up,
-					   aMatrix<false> source_dn);
+calc_no_scat_trans_source_lw<false>(int ng,
+				    int nlev,
+				    const Config& config,
+				    const Array<2,false>& od,
+				    const Array<2,false>& planck_top,
+				    const Array<2,false>& planck_bot,
+				    Array<2,false> transmittance,
+				    Array<2,false> source_up,
+				    Array<2,false> source_dn);
+// Instantiate direct functions
+template
+void
+calc_ref_trans_source_lw<false>(int ng,
+				const Config& config,
+				const Array<1,false>& od,
+				const Array<1,false>& ssa,
+				const Array<1,false>& asymmetry,
+				const Array<1,false>& planck_top,
+				const Array<1,false>& planck_bot,
+				Array<1,false> reflectance,
+				Array<1,false> transmittance,
+				Array<1,false> source_up,
+				Array<1,false> source_dn);
 
 template
 void
-calc_ref_trans_lw<false>(int ng,
-			 const Config& config,
-			 const aVector<false>& od,
-			 const aVector<false>& ssa,
-			 const aVector<false>& asymmetry,
-			 const aVector<false>& planck_top,
-			 const aVector<false>& planck_bot,
-			 aVector<false> reflectance,
-			 aVector<false> transmittance,
-			 aVector<false> source_up,
-			 aVector<false> source_dn);
+calc_radiance_trans_source_lw<false>(int ng, int nlev,
+				     const Config& config,
+				     Real mu,
+				     const Array<2,false>& region_fracs,
+				     const Array<2,false>& planck_hl,
+				     const Array<3,false>& od,
+				     const Array<3,false>& ssa,
+				     const Array<2,false>& asymmetry,
+				     const Array<3,false>& flux_up_base,
+				     const Array<3,false>& flux_dn_top,
+				     Array<3,false> transmittance,
+				     Array<3,false> source_up,
+				     Array<3,false> source_dn);
 
-template
-void
-calc_transmittance<false>(int ng, int nlev,
-			  Real mu,                      // Cosine of sensor zenith angle
-			  const aArray<1,false>& clear_fraction, // (nlev,NREGIONS)
-			  const aArray<3,false>& od, // (nlev,NREGIONS,ng)
-			  aArray<3,false> transmittance); // (nlev,NREGIONS,ng)
-  
-template
-void
-calc_radiance_source<false>(int ng, int nlev,
-			    const Config& config,
-			    Real mu,
-			    const aArray<2,false>& reg_fracs,
-			    const aArray<2,false>& planck_hl,
-			    const aArray<3,false>& od,
-			    const aArray<3,false>& ssa,
-			    const aArray<2,false>& asymmetry,
-			    const aArray<3,false>& flux_up_base,
-			    const aArray<3,false>& flux_dn_top,
-			    const aArray<3,false>& transmittance,
-			    aArray<3,false> source_up,
-			    aArray<3,false> source_dn);
-
+// Instantiate active functions
 #if ADEPT_REAL_TYPE_SIZE == 8
 template
 void
-calc_no_scattering_transmittance_lw<true>(int ng,
-					  int nlev,
-					  const Config& config,
-					  const aMatrix<true>& od,
-					  const aMatrix<true>& planck_top,
-					  const aMatrix<true>& planck_bot,
-					  aMatrix<true> transmittance,
-					  aMatrix<true> source_up,
-					  aMatrix<true> source_dn);
+calc_no_scat_trans_source_lw<true>(int ng,
+				   int nlev,
+				   const Config& config,
+				   const Array<2,true>& od,
+				   const Array<2,true>& planck_top,
+				   const Array<2,true>& planck_bot,
+				   Array<2,true> transmittance,
+				   Array<2,true> source_up,
+				   Array<2,true> source_dn);
 
 
 template
 void
-calc_ref_trans_lw<true>(int ng,
-			const Config& config,
-			const aVector<true>& od,
-			const aVector<true>& ssa,
-			const aVector<true>& asymmetry,
-			const aVector<true>& planck_top,
-			const aVector<true>& planck_bot,
-			aVector<true> reflectance,
-			aVector<true> transmittance,
-			aVector<true> source_up,
-			aVector<true> source_dn);
+calc_ref_trans_source_lw<true>(int ng,
+			       const Config& config,
+			       const Array<1,true>& od,
+			       const Array<1,true>& ssa,
+			       const Array<1,true>& asymmetry,
+			       const Array<1,true>& planck_top,
+			       const Array<1,true>& planck_bot,
+			       Array<1,true> reflectance,
+			       Array<1,true> transmittance,
+			       Array<1,true> source_up,
+			       Array<1,true> source_dn);
 
 template
 void
-calc_transmittance<true>(int ng, int nlev,
-			 Real mu,                      // Cosine of sensor zenith angle
-			 const aArray<1,true>& clear_fraction, // (nlev,NREGIONS)
-			 const aArray<3,true>& od, // (nlev,NREGIONS,ng)
-			 aArray<3,true> transmittance); // (nlev,NREGIONS,ng)
-
-template
-void
-calc_radiance_source<true>(int ng, int nlev,
-			   const Config& config,
-			   Real mu,
-			   const aArray<2,true>& reg_fracs,
-			   const aArray<2,true>& planck_hl,
-			   const aArray<3,true>& od,
-			   const aArray<3,true>& ssa,
-			   const aArray<2,true>& asymmetry,
-			   const aArray<3,true>& flux_up_base,
-			   const aArray<3,true>& flux_dn_top,
-			   const aArray<3,true>& transmittance,
-			   aArray<3,true> source_up,
-			   aArray<3,true> source_dn);
+calc_radiance_trans_source_lw<true>(int ng, int nlev,
+				    const Config& config,
+				    Real mu,
+				    const Array<2,true>& region_fracs,
+				    const Array<2,true>& planck_hl,
+				    const Array<3,true>& od,
+				    const Array<3,true>& ssa,
+				    const Array<2,true>& asymmetry,
+				    const Array<3,true>& flux_up_base,
+				    const Array<3,true>& flux_dn_top,
+				    Array<3,true> transmittance,
+				    Array<3,true> source_up,
+				    Array<3,true> source_dn);
 
 
 #endif
-
-
 
 };

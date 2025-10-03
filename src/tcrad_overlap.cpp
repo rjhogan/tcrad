@@ -1,4 +1,4 @@
-// radiation_overlap.F90 - Module to compute cloud overlap quantities
+// tcrad_overlap.F90 - Compute cloud overlap quantities
 //
 // (C) Copyright 2014- ECMWF.
 //
@@ -11,60 +11,70 @@
 //
 // Author:  Robin Hogan
 // Email:   r.j.hogan@ecmwf.int
+//
+// This is adapted from ecRad's radiation_overlap.F90
 
 #include "tcrad_overlap.hpp"
+#include "tcrad_config.hpp"
 
 namespace tcrad {
-
-static const int NREGIONS = 3;
 
 // ---------------------------------------------------------------------
 // Calculate a matrix expressing the overlap of regions in adjacent
 // layers, using the Hogan and Illingworth (2000) "alpha" overlap
 // parameter, but allowing for the two cloudy regions in the
-// Tripleclouds assumption to have different areas
+// Tripleclouds assumption to have different areas. "op" is the
+// overlap parameter of (0) cloud boundaries and (1) internal cloud
+// heterogeneities, while frac_upper and frac_lower are the area
+// fractions of the three regions in the upper and lower layers,
+// respectively, each summing to one.
 template <bool IsActive>
-aMatrix33<IsActive>
-calc_alpha_overlap_matrix(const aVector2<IsActive>& op,
-			  const aVector3<IsActive>& frac_upper,
-			  const aVector3<IsActive>& frac_lower) {
+Matrix33<IsActive>
+calc_alpha_overlap_matrix(const Vector2<IsActive>& op,
+			  const Vector3<IsActive>& frac_upper,
+			  const Vector3<IsActive>& frac_lower,
+			  Real cloud_fraction_threshold) {
 
-  typedef typename scalar<IsActive>::type aScalar;
+  typedef typename scalar<IsActive>::type Scalar;
 
-  aMatrix33<IsActive> overlap_matrix;
+  // Output overlap matrix
+  Matrix33<IsActive> overlap_matrix;
 
-  aScalar cf_upper = frac_upper(1)+frac_upper(2);
-  aScalar cf_lower = frac_lower(1)+frac_lower(2);
+  // Cloud fraction is the sum of the two cloudy fractions
+  Scalar cf_upper = frac_upper(1)+frac_upper(2);
+  Scalar cf_lower = frac_lower(1)+frac_lower(2);
 
-  aScalar pair_cloud_cover = op(0)*max(cf_upper,cf_lower)
+  // Combined cloud cover of the two layers
+  Scalar pair_cloud_cover = op(0)*max(cf_upper,cf_lower)
     + (1.0 - op(0)) * (cf_upper + cf_lower - cf_upper*cf_lower);
 
-  // Clear in both layers 
+  // Element of overlap matrix representing the area fraction of the
+  // gridbox that is clear in both layers
   overlap_matrix(0,0) = 1.0 - pair_cloud_cover;
 
   // Clear in upper layer, cloudy in lower layer
-  aScalar one_over_cf = 1.0 / max(cf_lower, 1.0e-6);
+  Scalar one_over_cf = 1.0 / max(cf_lower, cloud_fraction_threshold);
   overlap_matrix(1,0) = (pair_cloud_cover - cf_upper)
     * frac_lower(1) * one_over_cf;
   overlap_matrix(2,0) = (pair_cloud_cover - cf_upper)
     * frac_lower(2) * one_over_cf;
 
   // Clear in lower layer, cloudy in upper
-  one_over_cf = 1.0 / max(cf_upper, 1.0e-6);
+  one_over_cf = 1.0 / max(cf_upper, cloud_fraction_threshold);
   overlap_matrix(0,1) = (pair_cloud_cover - cf_lower)
     * frac_upper(1) * one_over_cf;
   overlap_matrix(0,2) = (pair_cloud_cover - cf_lower)
     * frac_upper(2) * one_over_cf;
 
-  // Cloudy in both layers: frac_both is the fraction of the fraction of the
-  // gridbox with cloud in both layers
-  aScalar frac_both = cf_upper + cf_lower - pair_cloud_cover;
+  // Cloudy in both layers: frac_both is the fraction of the fraction
+  // of the gridbox with cloud in both layers
+  Scalar frac_both = cf_upper + cf_lower - pair_cloud_cover;
   // Treat low and high optical-depth regions within frac_both as one
   // treats clear and cloudy skies in the whole domain; redefine the
   // following variables treating the high optical-depth region as the
   // cloud
-  cf_upper = frac_upper(2) / max(cf_upper, 1.0e-6);
-  cf_lower = frac_lower(2) / max(cf_lower, 1.0e-6);
+  cf_upper = frac_upper(2) / max(cf_upper, cloud_fraction_threshold);
+  cf_lower = frac_lower(2) / max(cf_lower, cloud_fraction_threshold);
   pair_cloud_cover = op(1) * max(cf_upper,cf_lower)
     + (1.0 - op(1)) * (cf_upper + cf_lower - cf_upper * cf_lower);
   // Assign overlaps for this 2x2 section of the 3x3 matrix as for
@@ -77,27 +87,36 @@ calc_alpha_overlap_matrix(const aVector2<IsActive>& op,
   return overlap_matrix;
 }
   
+//---------------------------------------------------------------------
+// Compute the upward and downward overlap matrices u_overlap and
+// v_overlap, respectively, where u_overlap is defined as in Hogan et
+// al. (JAS, 2016) such that y=u_overlap*x, where x is a vector of
+// upwelling fluxes in each region just below an interface, and y is a
+// vector of upwelling fluxes in each region just above that
+// interface. HOWEVER in translating from Fortran to C++, all
+// dimensions were reversed so actually the orientation of the matrix
+// is such that y=transpose(u_overlap)*x. For nlev model levels there
+// are nlev+1 interfaces including the ground and top-of-atmosphere,
+// and so that is one of the dimensions of u_overlap and v_overlap.
 template <bool IsActive>
 void
 calc_overlap_matrices(int nlev,
 		      int ncol,
-		      const aArray<3,IsActive>& region_fracs,
-		      const aMatrix<IsActive>& overlap_param,
-		      aArray<4,IsActive> u_matrix,
-		      aArray<4,IsActive> v_matrix,
+		      const Array<3,IsActive>& region_fracs,
+		      const Array<2,IsActive>& overlap_param,
+		      Array<4,IsActive> u_overlap,
+		      Array<4,IsActive> v_overlap,
 		      Real cloud_fraction_threshold)
 {
-  static const Real DECORRELATION_SCALING = 0.5;
-
   // Overlap matrix (non-directional)
-  aMatrix33<IsActive> overlap_matrix;
+  Matrix33<IsActive> overlap_matrix;
   
   // Fraction of the gridbox occupied by each region in the upper and
   // lower layers for an interface
-  aVector3<IsActive> frac_upper, frac_lower;
+  Vector3<IsActive> frac_upper, frac_lower;
 
   // Overlap parameter for first two regions
-  aVector2<IsActive> op;
+  Vector2<IsActive> op;
 
   // Loop over atmospheric columns
   for (int jcol = 0; jcol < ncol; ++jcol) {
@@ -144,24 +163,25 @@ calc_overlap_matrices(int nlev,
 	  op(1) = op(0);
 	}
       }
-      overlap_matrix = calc_alpha_overlap_matrix(op, frac_upper, frac_lower);
+      overlap_matrix = calc_alpha_overlap_matrix(op, frac_upper, frac_lower,
+						 cloud_fraction_threshold);
 
       // Convert to directional overlap matrices
       for (int jupper = 0; jupper < NREGIONS; ++jupper) {
 	for (int jlower = 0; jlower < NREGIONS; ++jlower) {
 	  if (frac_lower(jlower) >= cloud_fraction_threshold) {
-	    u_matrix(jcol,jlev,jlower,jupper) = overlap_matrix(jlower,jupper)
+	    u_overlap(jcol,jlev,jlower,jupper) = overlap_matrix(jlower,jupper)
 	      / frac_lower(jlower);
 	  }
 	  else {
-	    u_matrix(jcol,jlev,jlower,jupper) = 0.0;
+	    u_overlap(jcol,jlev,jlower,jupper) = 0.0;
 	  }
 	  if (frac_upper(jupper) >= cloud_fraction_threshold) {
-	    v_matrix(jcol,jlev,jupper,jlower) = overlap_matrix(jlower,jupper)
+	    v_overlap(jcol,jlev,jupper,jlower) = overlap_matrix(jlower,jupper)
 	      / frac_upper(jupper);
 	  }
 	  else {
-	    v_matrix(jcol,jlev,jupper,jlower) = 0.0;
+	    v_overlap(jcol,jlev,jupper,jlower) = 0.0;
 	  }
 	}
       }
@@ -177,10 +197,10 @@ template
 void
 tcrad::calc_overlap_matrices<false>(int nlev,
 				    int ncol,
-				    const aArray<3,false>& region_fracs,
-				    const aMatrix<false>& overlap_param,
-				    aArray<4,false> u_matrix,
-				    aArray<4,false> v_matrix,
+				    const Array<3,false>& region_fracs,
+				    const Array<2,false>& overlap_param,
+				    Array<4,false> u_overlap,
+				    Array<4,false> v_overlap,
 				    Real cloud_fraction_threshold);
 #if ADEPT_REAL_TYPE_SIZE == 8
 // Instantiate the differentiable function but only in double
@@ -189,9 +209,9 @@ template
 void
 tcrad::calc_overlap_matrices<true>(int nlev,
 				   int ncol,
-				   const aArray<3,true>& region_fracs,
-				   const aMatrix<true>& overlap_param,
-				   aArray<4,true> u_matrix,
-				   aArray<4,true> v_matrix,
+				   const Array<3,true>& region_fracs,
+				   const Array<2,true>& overlap_param,
+				   Array<4,true> u_overlap,
+				   Array<4,true> v_overlap,
 				   Real cloud_fraction_threshold);
 #endif

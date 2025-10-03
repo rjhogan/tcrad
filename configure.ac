@@ -4,7 +4,7 @@
 AC_PREREQ([2.63])
 
 # Remember to update the version number for a new release
-AC_INIT([TCRAD], [0.2], [r.j.hogan@ecmwf.int],[tcrad])
+AC_INIT([TCRAD], [0.3], [r.j.hogan@ecmwf.int],[tcrad])
 
 # Most code is C++ but there is some C and some Fortran
 AC_LANG([C++])
@@ -58,7 +58,8 @@ AC_MSG_NOTICE([  CPPFLAGS = $CPPFLAGS])
 AC_MSG_NOTICE([  CXXFLAGS = $CXXFLAGS])
 AC_MSG_NOTICE([  LDFLAGS =  $LDFLAGS])
 AC_MSG_NOTICE([  LIBS = $LIBS])
-AC_MSG_NOTICE([Typing "make; make install" will install the code and auxiliary files])
+AC_MSG_NOTICE([Typing "make; make install" will install the headers and library files in])
+AC_MSG_NOTICE([  $prefix])
 AC_MSG_NOTICE([********************************************************************])
 
 AC_OUTPUT

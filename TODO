@@ -1,0 +1,12 @@
+x - use adept::Array instead of "aArray"
+x - proper interface to Config structure
+ - code only works with one column at a time (?)
+x - C++ routine that does the full radiance and flux problem then a conversion layer from Fortran
+ - C/Fortran interface with pointers to contiguous arrays
+ - Decide package name
+ - Add TL/AD/K
+x - Check RTTOV interface
+x - Comments
+ - ICA version
+ - only compute layer boundary fluxes that are actually used, e.g. up at base and down at top
+x - remove redundant variables
