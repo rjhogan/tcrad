@@ -43,12 +43,18 @@ void calc_tripleclouds_radiance_lw(int ng,
 				   const Array<1,IsActive>& overlap_param,
 				   Array<1,IsActive> radiance)
 {
-
+  // Area fraction of the three regions at each level, clear and then
+  // two cloudy
   Array<2,IsActive> region_fracs(nlev,NREGIONS);
-  Array<2,IsActive> od_scaling(nlev,NREGIONS);
+  // Scaling of the cloud optical depth in the two cloudy regions;
+  // note that the indexing is therefore jreg-1
+  Array<2,IsActive> od_scaling(nlev,NREGIONS-1);
+  // Calculate the region fractions and optical depth scalings
   calc_region_properties(nlev, NREGIONS, cloud_fraction, fractional_std,
 			 region_fracs, od_scaling, config.cloud_fraction_threshold);
-
+  // Overlap matrices as defined by Hogan et al. (2016), except note
+  // that their dimensions have been reversed in the move from Fortran
+  // to C++.
   Array<3,IsActive> u_overlap(nlev+1,NREGIONS,NREGIONS);
   Array<3,IsActive> v_overlap(nlev+1,NREGIONS,NREGIONS);
   calc_overlap_matrices(nlev, region_fracs, overlap_param,
@@ -78,9 +84,9 @@ void calc_tripleclouds_radiance_lw(int ng,
       // scattering properties
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
 	od(jlev,jreg,__) = od_clear(jlev,__)
-	  + od_scaling(jlev,jreg) * od_cloud(jlev,__);
+	  + od_scaling(jlev,jreg-1) * od_cloud(jlev,__);
 	ssa(jlev,jreg-1,__) = ssa_cloud(jlev,__)
-	  * od_cloud(jlev,__) * od_scaling(jlev,jreg)
+	  * od_cloud(jlev,__) * od_scaling(jlev,jreg-1)
 	  / od(jlev,jreg,__);
       }
     }

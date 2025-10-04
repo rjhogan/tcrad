@@ -11,5 +11,5 @@ x - Comments
  - only compute layer boundary fluxes that are actually used, e.g. up at base and down at top
 x - remove redundant variables
  - Stack held in config object, possibly renamed context
- - od_scaling should be dimensioned NREGIONS-1
- - ssa should be dimensioned NREGIONS-1
+x - od_scaling should be dimensioned NREGIONS-1
+x - ssa should be dimensioned NREGIONS-1

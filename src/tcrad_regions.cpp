@@ -52,7 +52,7 @@ calc_region_properties(int nlev,
     // homogeneous
     region_fracs(__,1) = cloud_fraction;
     region_fracs(__,0) = 1.0 - cloud_fraction;
-    od_scaling(__,0) = 1.0;
+    od_scaling(__,0) = 1.0; // First cloudy region
   }
   else {
     // We treat the distribution as a gamma then the 16th
@@ -71,14 +71,14 @@ calc_region_properties(int nlev,
       }
       else {
 	region_fracs(jlev,0) = 1.0 - cloud_fraction(jlev);
-	// Fraction and optical-depth scaling of the lower of the
-	// two cloudy regions
+	// Fraction and optical-depth scaling of the first of the
+	// two cloudy regions (least optical depth)
 	region_fracs(jlev,1) = cloud_fraction(jlev)
 	  * max(MIN_LOWER_FRAC,
 		min(MAX_LOWER_FRAC,
 		    LOWER_FRAC_FSD_INTERCEPT
 		    + fractional_std(jlev)*LOWER_FRAC_FSD_GRADIENT));
-	od_scaling(jlev,1) = MIN_GAMMA_OD_SCALING
+	od_scaling(jlev,0) = MIN_GAMMA_OD_SCALING
 	  + (1.0 - MIN_GAMMA_OD_SCALING)
 	  * exp(-fractional_std(jlev)
 		*(1.0 + 0.5*fractional_std(jlev)
@@ -87,9 +87,9 @@ calc_region_properties(int nlev,
 	region_fracs(jlev,2)
 	  = 1.0 - region_fracs(jlev,0) - region_fracs(jlev,1);
 	// Ensure conservation of the mean optical depth
-	od_scaling(jlev,2)
+	od_scaling(jlev,1)
 	  = (cloud_fraction(jlev)
-	     -region_fracs(jlev,1)*od_scaling(jlev,1))
+	     -region_fracs(jlev,1)*od_scaling(jlev,0))
 	  / region_fracs(jlev,2);
       }
     } // levels
