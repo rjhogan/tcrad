@@ -1,6 +1,6 @@
 x - use adept::Array instead of "aArray"
 x - proper interface to Config structure
- - code only works with one column at a time (?)
+x - code only works with one column at a time (?)
 x - C++ routine that does the full radiance and flux problem then a conversion layer from Fortran
  - C/Fortran interface with pointers to contiguous arrays
  - Decide package name
@@ -11,4 +11,5 @@ x - Comments
  - only compute layer boundary fluxes that are actually used, e.g. up at base and down at top
 x - remove redundant variables
  - Stack held in config object, possibly renamed context
- - 
+ - od_scaling should be dimensioned NREGIONS-1
+ - ssa should be dimensioned NREGIONS-1

@@ -31,11 +31,10 @@ template <bool IsActive>
 void
 calc_region_properties(int nlev,
 		       int nreg,
-		       int ncol,
-		       const Array<2,IsActive>& cloud_fraction,
-		       const Array<2>& fractional_std,
-		       Array<3,IsActive> region_fracs,
-		       Array<3,IsActive> od_scaling,
+		       const Array<1,IsActive>& cloud_fraction,
+		       const Array<1>& fractional_std,
+		       Array<2,IsActive> region_fracs,
+		       Array<2,IsActive> od_scaling,
 		       Real cloud_fraction_threshold);
 
 };

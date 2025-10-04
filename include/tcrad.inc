@@ -22,7 +22,7 @@ interface
   ! treats cloud inhomogeneity by dividing each model level into three
   ! regions, one clear and two cloudy (with differing optical depth),
   ! returning a profile of upwelling and downwelling spectral fluxes.
-  subroutine tcrad_flux_lw(ng, nlev, ncol, config, &
+  subroutine tcrad_flux_lw(ng, nlev, config, &
        &     surf_emission, surf_albedo, &
        &     planck_hl, cloud_fraction, fractional_std, &
        &     od_clear, od_cloud, ssa_cloud, asymmetry_cloud, &
@@ -46,15 +46,15 @@ end enum
   end type tcrad_config
   
   
-    integer(c_int),     value      :: ng, nlev, ncol
-    type(tcrad_config), intent(in) :: config
-    real(c_double),   intent(in) :: surf_emission(:,:), surf_albedo(:,:)
-    real(c_double),   intent(in) :: planck_hl(:,:,:)
-    real(c_double),   intent(in) :: cloud_fraction(:,:), fractional_std(:,:)
-    real(c_double),   intent(in) :: od_clear(:,:,:), od_cloud(:,:,:)
-    real(c_double),   intent(in) :: ssa_cloud(:,:,:), asymmetry_cloud(:,:,:)
-    real(c_double),   intent(in) :: overlap_param(:,:)
-    real(c_double),   intent(out):: flux_up(:,:,:), flux_dn(:,:,:)
+    integer(c_int),   value      :: ng, nlev
+    type(tcrad_config),intent(in):: config
+    real(c_double),   intent(in) :: surf_emission(:), surf_albedo(:)
+    real(c_double),   intent(in) :: planck_hl(:,:)
+    real(c_double),   intent(in) :: cloud_fraction(:), fractional_std(:)
+    real(c_double),   intent(in) :: od_clear(:,:), od_cloud(:,:)
+    real(c_double),   intent(in) :: ssa_cloud(:,:), asymmetry_cloud(:,:)
+    real(c_double),   intent(in) :: overlap_param(:)
+    real(c_double),   intent(out):: flux_up(:,:), flux_dn(:,:)
     
   end subroutine tcrad_flux_lw
   
@@ -63,7 +63,7 @@ end enum
   ! treats cloud inhomogeneity by dividing each model level into three
   ! regions, one clear and two cloudy (with differing optical depth),
   ! returning a top-of-atmosphere spectral upwelling radiances.
-  subroutine tcrad_radiance_lw(ng, nlev, ncol, config, &
+  subroutine tcrad_radiance_lw(ng, nlev, config, &
        &     mu, surf_emission, surf_albedo, &
        &     planck_hl, cloud_fraction, fractional_std, &
        &     od_clear, od_cloud, ssa_cloud, asymmetry_cloud, &
@@ -80,23 +80,23 @@ end enum
    enumerator :: TWO_STREAM_SCALED_WISCOMBE_GRAMS = 4
  end enum
 
-   type, bind(c) :: tcrad_config
+ type, bind(c) :: tcrad_config
      logical(c_bool)  :: do_specular_surface = .false.
      integer(c_int)   :: two_stream_scheme = TWO_STREAM_ELSASSER
      real(c_double) :: cloud_fraction_threshold = 1.0e-6
    end type tcrad_config
   
-  integer(c_int), value :: ng, nlev, ncol
-  type(tcrad_config), intent(in) :: config
-    real(c_double), intent(in) :: mu(:)
-    real(c_double), intent(in) :: surf_emission(:,:), surf_albedo(:,:)
-    real(c_double), intent(in) :: planck_hl(:,:,:)
-    real(c_double), intent(in) :: cloud_fraction(:,:), fractional_std(:,:)
-    real(c_double), intent(in) :: od_clear(:,:,:), od_cloud(:,:,:)
-    real(c_double), intent(in) :: ssa_cloud(:,:,:), asymmetry_cloud(:,:,:)
-    real(c_double), intent(in) :: overlap_param(:,:)
-    real(c_double), intent(out) :: radiance(:,:)
-    
+  integer(c_int),   value      :: ng, nlev
+  type(tcrad_config),intent(in):: config
+  real(c_double), value      :: mu
+  real(c_double), intent(in) :: surf_emission(:), surf_albedo(:)
+  real(c_double), intent(in) :: planck_hl(:,:)
+  real(c_double), intent(in) :: cloud_fraction(:), fractional_std(:)
+  real(c_double), intent(in) :: od_clear(:,:), od_cloud(:,:)
+  real(c_double), intent(in) :: ssa_cloud(:,:), asymmetry_cloud(:,:)
+  real(c_double), intent(in) :: overlap_param(:)
+  real(c_double), intent(out) :: radiance(:)
+  
   end subroutine tcrad_radiance_lw
 
    

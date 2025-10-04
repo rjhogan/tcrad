@@ -28,9 +28,8 @@ extern "C" {
 // features provided by the Adept library.
 void tcrad_radiance_lw(int ng,
 		       int nlev,
-		       int ncol,
 		       tcrad::Config* config,
-		       FortranArray* mu_in, // Cosine of sensor zenith angle
+		       Real mu, // Cosine of sensor zenith angle
 		       FortranArray* surf_emission_in,
 		       FortranArray* surf_albedo_in,
 		       FortranArray* planck_hl_in,
@@ -43,15 +42,13 @@ void tcrad_radiance_lw(int ng,
 		       FortranArray* overlap_param_in,
 		       FortranArray* radiance_out)
 {
-  Array<1> mu;
-  Array<2> surf_emission, surf_albedo;
-  Array<3> planck_hl;
-  Array<2> cloud_fraction, fractional_std;
-  Array<3> od_clear, od_cloud, ssa_cloud, asymmetry_cloud;
-  Array<2> overlap_param;
-  Array<2> radiance;
+  Array<1> surf_emission, surf_albedo;
+  Array<2> planck_hl;
+  Array<1> cloud_fraction, fractional_std;
+  Array<2> od_clear, od_cloud, ssa_cloud, asymmetry_cloud;
+  Array<1> overlap_param;
+  Array<1> radiance;
 
-  mu             >>= mu_in;
   surf_emission  >>= surf_emission_in;
   surf_albedo    >>= surf_albedo_in;
   planck_hl      >>= planck_hl_in;
@@ -64,14 +61,14 @@ void tcrad_radiance_lw(int ng,
   overlap_param  >>= overlap_param_in;
   radiance       >>= radiance_out;
 
-  calc_tripleclouds_radiance_lw(ng, nlev, ncol, *config, mu,
+  calc_tripleclouds_radiance_lw(ng, nlev, *config, mu,
 				surf_emission, surf_albedo,
 				planck_hl, cloud_fraction,
 				fractional_std, od_clear,
 				od_cloud, ssa_cloud, asymmetry_cloud,
 				overlap_param, radiance);
 }
-
+ 
 };
 
 

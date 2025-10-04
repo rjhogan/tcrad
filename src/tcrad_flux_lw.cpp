@@ -28,30 +28,29 @@ namespace tcrad {
 template <bool IsActive>
 void calc_tripleclouds_flux_lw(int ng,
 			       int nlev,
-			       int ncol,
 			       const Config& config,
-			       const Array<2,IsActive>& surf_emission,
-			       const Array<2,IsActive>& surf_albedo,
-			       const Array<3,IsActive>& planck_hl,
-			       const Array<2,IsActive>& cloud_fraction,
-			       const Array<2>& fractional_std,
-			       const Array<3,IsActive>& od_clear,
-			       const Array<3,IsActive>& od_cloud,
-			       const Array<3,IsActive>& ssa_cloud,
-			       const Array<3,IsActive>& asymmetry_cloud,
-			       const Array<2,IsActive>& overlap_param,
-			       Array<3,IsActive> flux_up,
-			       Array<3,IsActive> flux_dn)
+			       const Array<1,IsActive>& surf_emission,
+			       const Array<1,IsActive>& surf_albedo,
+			       const Array<2,IsActive>& planck_hl,
+			       const Array<1,IsActive>& cloud_fraction,
+			       const Array<1>& fractional_std,
+			       const Array<2,IsActive>& od_clear,
+			       const Array<2,IsActive>& od_cloud,
+			       const Array<2,IsActive>& ssa_cloud,
+			       const Array<2,IsActive>& asymmetry_cloud,
+			       const Array<1,IsActive>& overlap_param,
+			       Array<2,IsActive> flux_up,
+			       Array<2,IsActive> flux_dn)
 {
 
-  Array<3,IsActive> region_fracs(ncol,nlev,NREGIONS);
-  Array<3,IsActive> od_scaling(ncol,nlev,NREGIONS);
-  calc_region_properties(nlev, NREGIONS, ncol, cloud_fraction, fractional_std,
+  Array<2,IsActive> region_fracs(nlev,NREGIONS);
+  Array<2,IsActive> od_scaling(nlev,NREGIONS);
+  calc_region_properties(nlev, NREGIONS, cloud_fraction, fractional_std,
 			 region_fracs, od_scaling, config.cloud_fraction_threshold);
 
-  Array<4,IsActive> u_overlap(ncol,nlev+1,NREGIONS,NREGIONS);
-  Array<4,IsActive> v_overlap(ncol,nlev+1,NREGIONS,NREGIONS);
-  calc_overlap_matrices(nlev, ncol, region_fracs, overlap_param,
+  Array<3,IsActive> u_overlap(nlev+1,NREGIONS,NREGIONS);
+  Array<3,IsActive> v_overlap(nlev+1,NREGIONS,NREGIONS);
+  calc_overlap_matrices(nlev, region_fracs, overlap_param,
 			u_overlap, v_overlap, config.cloud_fraction_threshold);
 
   Array<3,IsActive> flux_up_base(nlev,NREGIONS,ng);
@@ -65,77 +64,71 @@ void calc_tripleclouds_flux_lw(int ng,
   Array<3,IsActive> od(nlev,NREGIONS,ng);
   Array<3,IsActive> ssa(nlev,NREGIONS,ng);
 
-  // Loop over columns
-  for (int jcol = 0; jcol < ncol; ++jcol) {
-    
-    od(__,0,__) = od_clear[jcol];
-    for (int jlev = 0; jlev < nlev; ++jlev) {
-      if (region_fracs(jcol,jlev,0) < 1.0) {
-	// Cloud present in layer: compute combined air+cloud
-	// scattering properties
-	for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-	  od(jlev,jreg,__) = od_clear(jcol,jlev,__)
-	    + od_scaling(jcol,jlev,jreg) * od_cloud(jcol,jlev,__);
-	  ssa(jlev,jreg,__) = ssa_cloud(jcol,jlev,__)
-	    * od_cloud(jcol,jlev,__) * od_scaling(jcol,jlev,jreg)
-	    / od(jlev,jreg,__);
-	}
+  od(__,0,__) = od_clear;
+  for (int jlev = 0; jlev < nlev; ++jlev) {
+    if (region_fracs(jlev,0) < 1.0) {
+      // Cloud present in layer: compute combined air+cloud
+      // scattering properties
+      for (int jreg = 1; jreg < NREGIONS; ++jreg) {
+	od(jlev,jreg,__) = od_clear(jlev,__)
+	  + od_scaling(jlev,jreg) * od_cloud(jlev,__);
+	ssa(jlev,jreg,__) = ssa_cloud(jlev,__)
+	  * od_cloud(jlev,__) * od_scaling(jlev,jreg)
+	  / od(jlev,jreg,__);
       }
     }
-    
-    // Calculate fluxes
-    solver_tripleclouds_lw(ng, nlev, config, region_fracs[jcol],
-			   u_overlap[jcol], v_overlap[jcol],
-			   od, ssa, asymmetry_cloud[jcol],
-			   planck_hl[jcol], surf_emission[jcol], surf_albedo[jcol],
-			   flux_up_base, flux_dn_base, flux_up_top, flux_dn_top);
-
-    // Sum over regions and copy to output
-    flux_up(jcol,range(0,nlev-1),__) = sum(flux_up_top,1);
-    flux_up(jcol,nlev,__)            = sum(flux_up_base(nlev-1,__,__),0);
-    flux_dn(jcol,range(0,nlev-1),__) = sum(flux_dn_top,1);
-    flux_dn(jcol,nlev,__)            = sum(flux_dn_base(nlev-1,__,__),0);
   }
-}
+    
+  // Calculate fluxes
+  solver_tripleclouds_lw(ng, nlev, config, region_fracs,
+			 u_overlap, v_overlap,
+			 od, ssa, asymmetry_cloud,
+			 planck_hl, surf_emission, surf_albedo,
+			 flux_up_base, flux_dn_base, flux_up_top, flux_dn_top);
+  
+    // Sum over regions and copy to output
+    flux_up(range(0,nlev-1),__) = sum(flux_up_top,1);
+    flux_up(nlev,__)            = sum(flux_up_base(nlev-1,__,__),0);
+    flux_dn(range(0,nlev-1),__) = sum(flux_dn_top,1);
+    flux_dn(nlev,__)            = sum(flux_dn_base(nlev-1,__,__),0);
+  }
 
 };
 
 template void
 tcrad::calc_tripleclouds_flux_lw<false>(int ng,
 					int nlev,
-					int ncol,
 					const Config& config,
-					const Array<2,false>& surf_emission,
-					const Array<2,false>& surf_albedo,
-					const Array<3,false>& planck_hl,
-					const Array<2,false>& cloud_fraction,
-					const Array<2>& fractional_std,
-					const Array<3,false>& od_clear,
-					const Array<3,false>& od_cloud,
-					const Array<3,false>& ssa_cloud,
-					const Array<3,false>& asymmetry_cloud,
-					const Array<2,false>& overlap_param,
-					Array<3,false> flux_up,
-					Array<3,false> flux_dn);
+					const Array<1,false>& surf_emission,
+					const Array<1,false>& surf_albedo,
+					const Array<2,false>& planck_hl,
+					const Array<1,false>& cloud_fraction,
+					const Array<1>& fractional_std,
+					const Array<2,false>& od_clear,
+					const Array<2,false>& od_cloud,
+					const Array<2,false>& ssa_cloud,
+					const Array<2,false>& asymmetry_cloud,
+					const Array<1,false>& overlap_param,
+					Array<2,false> flux_up,
+					Array<2,false> flux_dn);
 
 #if ADEPT_REAL_TYPE_SIZE == 8
 template void
 tcrad::calc_tripleclouds_flux_lw<true>(int ng,
 				       int nlev,
-				       int ncol,
 				       const Config& config,
-				       const Array<2,true>& surf_emission,
-				       const Array<2,true>& surf_albedo,
-				       const Array<3,true>& planck_hl,
-				       const Array<2,true>& cloud_fraction,
-				       const Array<2>& fractional_std,
-				       const Array<3,true>& od_clear,
-				       const Array<3,true>& od_cloud,
-				       const Array<3,true>& ssa_cloud,
-				       const Array<3,true>& asymmetry_cloud,
-				       const Array<2,true>& overlap_param,
-				       Array<3,true> flux_up,
-				       Array<3,true> flux_dn);
+				       const Array<1,true>& surf_emission,
+				       const Array<1,true>& surf_albedo,
+				       const Array<2,true>& planck_hl,
+				       const Array<1,true>& cloud_fraction,
+				       const Array<1>& fractional_std,
+				       const Array<2,true>& od_clear,
+				       const Array<2,true>& od_cloud,
+				       const Array<2,true>& ssa_cloud,
+				       const Array<2,true>& asymmetry_cloud,
+				       const Array<1,true>& overlap_param,
+				       Array<2,true> flux_up,
+				       Array<2,true> flux_dn);
 
 #endif
 

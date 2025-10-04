@@ -33,11 +33,10 @@ namespace tcrad {
 template <bool IsActive>
 void
 calc_overlap_matrices(int nlev,
-		      int ncol,
-		      const Array<3,IsActive>& region_fracs,
-		      const Array<2,IsActive>& overlap_param,
-		      Array<4,IsActive> u_overlap,
-		      Array<4,IsActive> v_overlap,
+		      const Array<2,IsActive>& region_fracs,
+		      const Array<1,IsActive>& overlap_param,
+		      Array<3,IsActive> u_overlap,
+		      Array<3,IsActive> v_overlap,
 		      Real cloud_fraction_threshold);
 
 };

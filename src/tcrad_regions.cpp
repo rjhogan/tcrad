@@ -30,11 +30,10 @@ template <bool IsActive>
 void
 calc_region_properties(int nlev,
 		       int nreg,
-		       int ncol,
-		       const Array<2,IsActive>& cloud_fraction,
-		       const Array<2>& fractional_std,
-		       Array<3,IsActive> region_fracs,
-		       Array<3,IsActive> od_scaling,
+		       const Array<1,IsActive>& cloud_fraction,
+		       const Array<1>& fractional_std,
+		       Array<2,IsActive> region_fracs,
+		       Array<2,IsActive> od_scaling,
 		       Real cloud_fraction_threshold)
 {
   // See appendix of Hogan et al. (JAS, 2019)  
@@ -51,9 +50,9 @@ calc_region_properties(int nlev,
   if (nreg == 2) {
     // Only one clear-sky and one cloudy region: cloudy region is
     // homogeneous
-    region_fracs(__,__,1) = transpose(cloud_fraction);
-    region_fracs(__,__,0) = 1.0 - region_fracs(__,__,1);
-    od_scaling(__,__,0) = 1.0;
+    region_fracs(__,1) = cloud_fraction;
+    region_fracs(__,0) = 1.0 - cloud_fraction;
+    od_scaling(__,0) = 1.0;
   }
   else {
     // We treat the distribution as a gamma then the 16th
@@ -62,40 +61,38 @@ calc_region_properties(int nlev,
     // limit of 1/40, and for higher FSDs reduce the fractional
     // cover of the denser region - see region_fractions routine
     // below
-    for (int jcol = 0; jcol < ncol; ++jcol) {
-      for (int jlev = 0; jlev < nlev; ++jlev) {
-	if (cloud_fraction(jlev,jcol) < cloud_fraction_threshold) {
-	  region_fracs(jcol,jlev,0)  = 1.0; // Clear region
-	  region_fracs(jcol,jlev,1)  = 0.0; // First cloudy region
-	  region_fracs(jcol,jlev,2)  = 0.0; // Second cloudy region
-	  od_scaling(jcol,jlev,0) = 1.0; // First cloudy region
-	  od_scaling(jcol,jlev,1) = 1.0; // Second cloudy region
-	}
-	else {
-	  region_fracs(jcol,jlev,0) = 1.0 - cloud_fraction(jlev,jcol);
-	  // Fraction and optical-depth scaling of the lower of the
-          // two cloudy regions
-	  region_fracs(jcol,jlev,1) = cloud_fraction(jlev,jcol)
-	    * max(MIN_LOWER_FRAC,
-		  min(MAX_LOWER_FRAC,
-		      LOWER_FRAC_FSD_INTERCEPT
-		      + fractional_std(jlev,jcol)*LOWER_FRAC_FSD_GRADIENT));
-	  od_scaling(jcol,jlev,1) = MIN_GAMMA_OD_SCALING
-	    + (1.0 - MIN_GAMMA_OD_SCALING)
-	    * exp(-fractional_std(jlev,jcol)
-		  *(1.0 + 0.5*fractional_std(jlev,jcol)
-		    *(1.0 + 0.5*fractional_std(jlev,jcol))));
-	  // Fraction of the upper of the two cloudy regions
-	  region_fracs(jcol,jlev,2)
-	    = 1.0 - region_fracs(jcol,jlev,0) - region_fracs(jcol,jlev,1);
-	  // Ensure conservation of the mean optical depth
-	  od_scaling(jcol,jlev,2)
-	    = (cloud_fraction(jlev,jcol)
-	       -region_fracs(jcol,jlev,1)*od_scaling(jcol,jlev,1))
-	    / region_fracs(jcol,jlev,2);
-	}
-      } // levels
-    } // columns
+    for (int jlev = 0; jlev < nlev; ++jlev) {
+      if (cloud_fraction(jlev) < cloud_fraction_threshold) {
+	region_fracs(jlev,0) = 1.0; // Clear region
+	region_fracs(jlev,1) = 0.0; // First cloudy region
+	region_fracs(jlev,2) = 0.0; // Second cloudy region
+	od_scaling(jlev,0)   = 1.0; // First cloudy region
+	od_scaling(jlev,1)   = 1.0; // Second cloudy region
+      }
+      else {
+	region_fracs(jlev,0) = 1.0 - cloud_fraction(jlev);
+	// Fraction and optical-depth scaling of the lower of the
+	// two cloudy regions
+	region_fracs(jlev,1) = cloud_fraction(jlev)
+	  * max(MIN_LOWER_FRAC,
+		min(MAX_LOWER_FRAC,
+		    LOWER_FRAC_FSD_INTERCEPT
+		    + fractional_std(jlev)*LOWER_FRAC_FSD_GRADIENT));
+	od_scaling(jlev,1) = MIN_GAMMA_OD_SCALING
+	  + (1.0 - MIN_GAMMA_OD_SCALING)
+	  * exp(-fractional_std(jlev)
+		*(1.0 + 0.5*fractional_std(jlev)
+		  *(1.0 + 0.5*fractional_std(jlev))));
+	// Fraction of the upper of the two cloudy regions
+	region_fracs(jlev,2)
+	  = 1.0 - region_fracs(jlev,0) - region_fracs(jlev,1);
+	// Ensure conservation of the mean optical depth
+	od_scaling(jlev,2)
+	  = (cloud_fraction(jlev)
+	     -region_fracs(jlev,1)*od_scaling(jlev,1))
+	  / region_fracs(jlev,2);
+      }
+    } // levels
   }
 }
   
@@ -106,11 +103,10 @@ template
 void
 tcrad::calc_region_properties<false>(int nlev,
 				     int nreg,
-				     int ncol,
-				     const Array<2,false>& cloud_fraction,
-				     const Array<2>& fractional_std,
-				     Array<3,false> region_fracs,
-				     Array<3,false> od_scaling,
+				     const Array<1,false>& cloud_fraction,
+				     const Array<1>& fractional_std,
+				     Array<2,false> region_fracs,
+				     Array<2,false> od_scaling,
 				     Real cloud_fraction_threshold);
 #if ADEPT_REAL_TYPE_SIZE == 8
 // Instantiate the differentiable function but only in double
@@ -119,11 +115,10 @@ template
 void
 tcrad::calc_region_properties<true>(int nlev,
 				    int nreg,
-				    int ncol,
-				    const Array<2,true>& cloud_fraction,
-				    const Array<2>& fractional_std,
-				    Array<3,true> region_fracs,
-				    Array<3,true> od_scaling,
+				    const Array<1,true>& cloud_fraction,
+				    const Array<1>& fractional_std,
+				    Array<2,true> region_fracs,
+				    Array<2,true> od_scaling,
 				    Real cloud_fraction_threshold);
 
 #endif

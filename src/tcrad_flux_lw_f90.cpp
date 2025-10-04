@@ -28,7 +28,6 @@ extern "C" {
 // features provided by the Adept library.
 void tcrad_flux_lw(int ng,
 		   int nlev,
-		   int ncol,
 		   tcrad::Config* config,
 		   FortranArray* surf_emission_in,
 		   FortranArray* surf_albedo_in,
@@ -43,12 +42,12 @@ void tcrad_flux_lw(int ng,
 		   FortranArray* flux_up_out,
 		   FortranArray* flux_dn_out)
 {
-  Array<2> surf_emission, surf_albedo;
-  Array<3> planck_hl;
-  Array<2> cloud_fraction, fractional_std;
-  Array<3> od_clear, od_cloud, ssa_cloud, asymmetry_cloud;
-  Array<2> overlap_param;
-  Array<3> flux_up, flux_dn;
+  Array<1> surf_emission, surf_albedo;
+  Array<2> planck_hl;
+  Array<1> cloud_fraction, fractional_std;
+  Array<2> od_clear, od_cloud, ssa_cloud, asymmetry_cloud;
+  Array<1> overlap_param;
+  Array<2> flux_up, flux_dn;
 
   surf_emission  >>= surf_emission_in;
   surf_albedo    >>= surf_albedo_in;
@@ -63,7 +62,7 @@ void tcrad_flux_lw(int ng,
   flux_up        >>= flux_up_out;
   flux_dn        >>= flux_dn_out;
 
-  calc_tripleclouds_flux_lw(ng, nlev, ncol, *config,
+  calc_tripleclouds_flux_lw(ng, nlev, *config,
 			    surf_emission, surf_albedo,
 			    planck_hl, cloud_fraction,
 			    fractional_std, od_clear,

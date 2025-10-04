@@ -101,11 +101,10 @@ calc_alpha_overlap_matrix(const Vector2<IsActive>& op,
 template <bool IsActive>
 void
 calc_overlap_matrices(int nlev,
-		      int ncol,
-		      const Array<3,IsActive>& region_fracs,
-		      const Array<2,IsActive>& overlap_param,
-		      Array<4,IsActive> u_overlap,
-		      Array<4,IsActive> v_overlap,
+		      const Array<2,IsActive>& region_fracs,
+		      const Array<1,IsActive>& overlap_param,
+		      Array<3,IsActive> u_overlap,
+		      Array<3,IsActive> v_overlap,
 		      Real cloud_fraction_threshold)
 {
   // Overlap matrix (non-directional)
@@ -118,76 +117,73 @@ calc_overlap_matrices(int nlev,
   // Overlap parameter for first two regions
   Vector2<IsActive> op;
 
-  // Loop over atmospheric columns
-  for (int jcol = 0; jcol < ncol; ++jcol) {
-    // For this column, outer space is treated as one clear-sky
-    // region, so the fractions are assigned as such
-    frac_upper(0) = 1.0;
-    frac_upper(range(1,end)) = 0.0;
+  // Outer space is treated as one clear-sky region, so the fractions
+  // are assigned as such
+  frac_upper(0) = 1.0;
+  frac_upper(range(1,end)) = 0.0;
+  
+  // Overlap parameter is irrelevant when there is only one region
+  // in the upper layer
+  op = 1.0;
 
-    // Overlap parameter is irrelevant when there is only one region
-    // in the upper layer
-    op = 1.0;
-
-    // Loop down through the atmosphere, where jlev indexes each
-    // half-level starting at 1 for the top-of-atmosphere, as well
-    // as indexing each level starting at 1 for the top-most level.
-    for (int jlev = 0; jlev < nlev+1; ++jlev) {
-      // Fraction of each region just below the interface
-      if (jlev >= nlev) {
-	// We are at the surface: treat as a single clear-sky region
-	frac_lower(0) = 1.0;
-	frac_lower(range(1,end)) = 0.0;
+  // Loop down through the atmosphere, where jlev indexes each
+  // half-level starting at 1 for the top-of-atmosphere, as well
+  // as indexing each level starting at 1 for the top-most level.
+  for (int jlev = 0; jlev < nlev+1; ++jlev) {
+    // Fraction of each region just below the interface
+    if (jlev >= nlev) {
+      // We are at the surface: treat as a single clear-sky region
+      frac_lower(0) = 1.0;
+      frac_lower(range(1,end)) = 0.0;
+    }
+    else {
+      frac_lower = region_fracs(jlev,__);
+    }
+    
+    // Compute the overlap parameter of the interface just below the
+    // current full level
+    if (jlev == 0 || jlev >= nlev) {
+      // We are at the surface or top-of-atmosphere: overlap
+      // parameter is irrelevant
+      op = 1.0;
+    }
+    else {
+      // We are not at the surface
+      op(0) = overlap_param(jlev-1);
+      // For cloudy regions, scale the cloud-boundary overlap
+      // parameter to obtain the cloud-inhomogeneity overlap
+      // parameter as follows
+      if (op(0) >= 0.0) {
+	op(1) = pow(op(0), 1.0/DECORRELATION_SCALING);
       }
       else {
-	frac_lower = region_fracs(jcol,jlev,__);
+	op(1) = op(0);
       }
-
-      // Compute the overlap parameter of the interface just below the
-      // current full level
-      if (jlev == 0 || jlev >= nlev) {
-	// We are at the surface or top-of-atmosphere: overlap
-	// parameter is irrelevant
-	op = 1.0;
-      }
-      else {
-	// We are not at the surface
-	op(0) = overlap_param(jlev-1,jcol);
-	// For cloudy regions, scale the cloud-boundary overlap
-	// parameter to obtain the cloud-inhomogeneity overlap
-	// parameter as follows
-	if (op(0) >= 0.0) {
-	  op(1) = pow(op(0), 1.0/DECORRELATION_SCALING);
+    }
+    overlap_matrix = calc_alpha_overlap_matrix(op, frac_upper, frac_lower,
+					       cloud_fraction_threshold);
+    
+    // Convert to directional overlap matrices
+    for (int jupper = 0; jupper < NREGIONS; ++jupper) {
+      for (int jlower = 0; jlower < NREGIONS; ++jlower) {
+	if (frac_lower(jlower) >= cloud_fraction_threshold) {
+	  u_overlap(jlev,jlower,jupper) = overlap_matrix(jlower,jupper)
+	    / frac_lower(jlower);
 	}
 	else {
-	  op(1) = op(0);
+	  u_overlap(jlev,jlower,jupper) = 0.0;
+	}
+	if (frac_upper(jupper) >= cloud_fraction_threshold) {
+	  v_overlap(jlev,jupper,jlower) = overlap_matrix(jlower,jupper)
+	    / frac_upper(jupper);
+	}
+	else {
+	  v_overlap(jlev,jupper,jlower) = 0.0;
 	}
       }
-      overlap_matrix = calc_alpha_overlap_matrix(op, frac_upper, frac_lower,
-						 cloud_fraction_threshold);
-
-      // Convert to directional overlap matrices
-      for (int jupper = 0; jupper < NREGIONS; ++jupper) {
-	for (int jlower = 0; jlower < NREGIONS; ++jlower) {
-	  if (frac_lower(jlower) >= cloud_fraction_threshold) {
-	    u_overlap(jcol,jlev,jlower,jupper) = overlap_matrix(jlower,jupper)
-	      / frac_lower(jlower);
-	  }
-	  else {
-	    u_overlap(jcol,jlev,jlower,jupper) = 0.0;
-	  }
-	  if (frac_upper(jupper) >= cloud_fraction_threshold) {
-	    v_overlap(jcol,jlev,jupper,jlower) = overlap_matrix(jlower,jupper)
-	      / frac_upper(jupper);
-	  }
-	  else {
-	    v_overlap(jcol,jlev,jupper,jlower) = 0.0;
-	  }
-	}
-      }
-      frac_upper = frac_lower;
-    } // levels
-  } // columns
+    }
+    frac_upper = frac_lower;
+  } // levels
 }
   
 }; // namespace tcrad
@@ -196,11 +192,10 @@ calc_overlap_matrices(int nlev,
 template
 void
 tcrad::calc_overlap_matrices<false>(int nlev,
-				    int ncol,
-				    const Array<3,false>& region_fracs,
-				    const Array<2,false>& overlap_param,
-				    Array<4,false> u_overlap,
-				    Array<4,false> v_overlap,
+				    const Array<2,false>& region_fracs,
+				    const Array<1,false>& overlap_param,
+				    Array<3,false> u_overlap,
+				    Array<3,false> v_overlap,
 				    Real cloud_fraction_threshold);
 #if ADEPT_REAL_TYPE_SIZE == 8
 // Instantiate the differentiable function but only in double
@@ -208,10 +203,9 @@ tcrad::calc_overlap_matrices<false>(int nlev,
 template
 void
 tcrad::calc_overlap_matrices<true>(int nlev,
-				   int ncol,
-				   const Array<3,true>& region_fracs,
-				   const Array<2,true>& overlap_param,
-				   Array<4,true> u_overlap,
-				   Array<4,true> v_overlap,
+				   const Array<2,true>& region_fracs,
+				   const Array<1,true>& overlap_param,
+				   Array<3,true> u_overlap,
+				   Array<3,true> v_overlap,
 				   Real cloud_fraction_threshold);
 #endif

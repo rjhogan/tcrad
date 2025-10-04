@@ -28,19 +28,18 @@ namespace tcrad {
 template <bool IsActive>
 void calc_tripleclouds_flux_lw(int ng,
 			       int nlev,
-			       int ncol,
 			       const Config& config,
-			       const Array<2,IsActive>& surf_emission,
-			       const Array<2,IsActive>& surf_albedo,
-			       const Array<3,IsActive>& planck_hl,
-			       const Array<2,IsActive>& cloud_fraction,
-			       const Array<2>& fractional_std,
-			       const Array<3,IsActive>& od_clear,
-			       const Array<3,IsActive>& od_cloud,
-			       const Array<3,IsActive>& ssa_cloud,
-			       const Array<3,IsActive>& asymmetry_cloud,
-			       const Array<2,IsActive>& overlap_param,
-			       Array<3,IsActive> flux_up,
-			       Array<3,IsActive> flux_dn);
+			       const Array<1,IsActive>& surf_emission,
+			       const Array<1,IsActive>& surf_albedo,
+			       const Array<2,IsActive>& planck_hl,
+			       const Array<1,IsActive>& cloud_fraction,
+			       const Array<1>& fractional_std,
+			       const Array<2,IsActive>& od_clear,
+			       const Array<2,IsActive>& od_cloud,
+			       const Array<2,IsActive>& ssa_cloud,
+			       const Array<2,IsActive>& asymmetry_cloud,
+			       const Array<1,IsActive>& overlap_param,
+			       Array<2,IsActive> flux_up,
+			       Array<2,IsActive> flux_dn);
 }
 #endif
