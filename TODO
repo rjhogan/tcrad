@@ -10,3 +10,5 @@ x - Comments
  - ICA version
  - only compute layer boundary fluxes that are actually used, e.g. up at base and down at top
 x - remove redundant variables
+ - Stack held in config object, possibly renamed context
+ - 

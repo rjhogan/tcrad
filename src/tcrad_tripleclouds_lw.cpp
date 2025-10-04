@@ -46,12 +46,10 @@ solver_tripleclouds_lw(int ng,
 		       Array<3,IsActive> flux_up_top,         // (nlev,nreg,ng)
 		       Array<3,IsActive> flux_dn_top)         // (nlev,nreg,ng)
 {
-  // In a clear-sky layer this will be 1, otherwise equal to NREGIONS
-  //  int nreg;
-
-  // Directional overlap matrices defined at all layer interfaces
-  // including top-of-atmosphere and the surface
-  Array<3,IsActive> reflectance(nlev,NREGIONS,ng);
+  // Layer reflectance and transmittance in layers and regions but
+  // note that since reflectance is zero in the clear region its
+  // region dimension is one less and all indexing is jreg-1.
+  Array<3,IsActive> reflectance(nlev,NREGIONS-1,ng);
   Array<3,IsActive> transmittance(nlev,NREGIONS,ng);
 
   // Emission by a layer into the upwelling or downwelling diffuse
@@ -76,7 +74,7 @@ solver_tripleclouds_lw(int ng,
 
   // Inverse of the denominator in the geometric series representing
   // multiple reflections between layers
-  Array<2,IsActive> inv_denom(NREGIONS,ng);
+  Array<1,IsActive> inv_denom(ng);
 
   // Identify clear-sky layers, with pseudo layer for below the
   // ground, treated as a single clear-sky region
@@ -106,22 +104,21 @@ solver_tripleclouds_lw(int ng,
   // --------------------------------------------------------
   // Section 3: Clear-sky calculation
   // --------------------------------------------------------
+
+  // Do we compute the properties of all layers in multiple function
+  // calls or a single one? The latter is faster.
+#define ALL_LAYERS 1
+#ifndef ALL_LAYERS
   calc_no_scat_trans_source_lw(ng, nlev, config, od(__,0,__),
 			       planck_hl(range(0,nlev-1),__), planck_hl(range(1,nlev),__),
 			       transmittance(__,0,__), source_up(__,0,__), source_dn(__,0,__));
-
-  reflectance(__,0,__) = 0.0;
-    
-  // --------------------------------------------------------
-  // Section 4: Loop over cloudy layers to compute reflectance and transmittance
-  // --------------------------------------------------------
   for (int jlev = i_cloud_top; jlev < nlev; ++jlev) { // Start at cloud top and work down
     if (!is_clear_sky_layer(jlev)) {
       // Cloudy sky
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-	calc_ref_trans_source_lw(ng, config, od(jlev,jreg,__), ssa(jlev,jreg,__), asymmetry(jlev,__),
+	calc_ref_trans_source_layer_lw(ng, config, od(jlev,jreg,__), ssa(jlev,jreg,__), asymmetry(jlev,__),
 				 planck_hl(jlev,__), planck_hl(jlev+1,__),
-				 reflectance(jlev,jreg,__), transmittance(jlev,jreg,__),
+				 reflectance(jlev,jreg-1,__), transmittance(jlev,jreg,__),
 				 source_up(jlev,jreg,__), source_dn(jlev,jreg,__));
       }
       for (int jreg = 0; jreg < NREGIONS; ++jreg) {
@@ -131,8 +128,17 @@ solver_tripleclouds_lw(int ng,
 	source_dn(jlev,jreg,__) *= region_fracs(jlev,jreg);
       }
     }
-  } // Loop over level
-
+  }
+#else
+  // --------------------------------------------------------
+  // Section 4: Loop over cloudy layers to compute reflectance and transmittance
+  // --------------------------------------------------------
+  calc_ref_trans_source_lw(ng, nlev, config, region_fracs, od, ssa, asymmetry,
+			   planck_hl(range(0,nlev-1),__), planck_hl(range(1,nlev),__),
+			   reflectance, transmittance,
+			   source_up, source_dn);
+#endif
+  
   // --------------------------------------------------------
   // Section 5: Compute total sources and albedos at each half level
   // --------------------------------------------------------
@@ -152,29 +158,30 @@ solver_tripleclouds_lw(int ng,
   // atmosphere and the total upwelling due to emission below each
   // level below using the adding method
   for (int jlev = nlev-1; jlev >= i_cloud_top; --jlev) {
+    // Clear region: no reflection from the layer itself so simpler equations
+    for (int jg = 0; jg < ng; ++jg) {
+      total_albedo_below(0,jg) =
+	transmittance(jlev,0,jg)*transmittance(jlev,0,jg)*total_albedo(jlev+1,0,jg);
+      total_source_below(0,jg) = source_up(jlev,0,jg)
+	+ transmittance(jlev,0,jg)*(total_source(jlev+1,0,jg)
+				    +total_albedo(jlev+1,0,jg)*source_dn(jlev,0,jg));
+    }
     if (is_clear_sky_layer(jlev)) {
-      for (int jg = 0; jg < ng; ++jg) {
-	inv_denom(0,jg) = 1.0 / (1.0 - total_albedo(jlev+1,0,jg)*reflectance(jlev,0,jg));
-	total_albedo_below(0,jg) = reflectance(jlev,0,jg)
-	  + transmittance(jlev,0,jg)*transmittance(jlev,0,jg)*total_albedo(jlev+1,0,jg)
-	  * inv_denom(0,jg);
-	total_source_below(0,jg) = source_up(jlev,0,jg)
-	  + transmittance(jlev,0,jg)*(total_source(jlev+1,0,jg)
-				      +total_albedo(jlev+1,0,jg)*source_dn(jlev,0,jg))
-	  * inv_denom(0,jg);
-      }
+      // Fill unused cloudy regions with zeros
       total_albedo_below(range(1,end),__) = 0.0;
       total_source_below(range(1,end),__) = 0.0;
     }
     else {
-      inv_denom = 1.0 / (1.0 - total_albedo(jlev+1,__,__)*reflectance(jlev,__,__));
-      total_albedo_below = reflectance(jlev,__,__)
-	+ transmittance(jlev,__,__)*transmittance(jlev,__,__)*total_albedo(jlev+1,__,__)
-	* inv_denom;
-      total_source_below = source_up(jlev,__,__)
-	+ transmittance(jlev,__,__)*(total_source(jlev+1,__,__)
-				     +total_albedo(jlev+1,__,__)*source_dn(jlev,__,__))
-	* inv_denom;
+      for (int jreg = 1; jreg < NREGIONS; ++jreg) {
+	inv_denom = 1.0 / (1.0 - total_albedo(jlev+1,jreg,__)*reflectance(jlev,jreg-1,__));
+	total_albedo_below(jreg,__) = reflectance(jlev,jreg-1,__)
+	  + transmittance(jlev,jreg,__)*transmittance(jlev,jreg,__)*total_albedo(jlev+1,jreg,__)
+	  * inv_denom;
+	total_source_below(jreg,__) = source_up(jlev,jreg,__)
+	  + transmittance(jlev,jreg,__)*(total_source(jlev+1,jreg,__)
+					 +total_albedo(jlev+1,jreg,__)*source_dn(jlev,jreg,__))
+	  * inv_denom;
+      }
     }
 
     // Account for cloud overlap when converting albedo below a
@@ -267,25 +274,25 @@ solver_tripleclouds_lw(int ng,
 
   // Final loop back down through the atmosphere to compute fluxes
   for (int jlev = i_cloud_top; jlev < nlev; ++jlev) {
-    if (is_clear_sky_layer(jlev)) {
-      for (int jg = 0; jg < ng; ++jg) {
-	flux_dn_base(jlev,0,jg) = (transmittance(jlev,0,jg) * flux_dn_top(jlev,0,jg)
-			 + reflectance(jlev,0,jg) * total_source(jlev+1,0,jg) + source_dn(jlev,0,jg) )
-	  / (1.0 - reflectance(jlev,0,jg) * total_albedo(jlev+1,0,jg));
-	flux_up_base(jlev,0,jg) = total_source(jlev+1,0,jg)
-	  + flux_dn_base(jlev,0,jg)*total_albedo(jlev+1,0,jg);
-	flux_up_top(jlev,0,__) = flux_up_base(jlev,0,__) * transmittance(jlev,0,__)
-	  + source_up(jlev,0,__) + flux_dn_top(jlev,0,__) * reflectance(jlev,0,__);
-      }
+    // Clear region
+    for (int jg = 0; jg < ng; ++jg) {
+      flux_dn_base(jlev,0,jg) = transmittance(jlev,0,jg) * flux_dn_top(jlev,0,jg)
+	+ source_dn(jlev,0,jg);
+      flux_up_base(jlev,0,jg) = total_source(jlev+1,0,jg)
+	+ flux_dn_base(jlev,0,jg)*total_albedo(jlev+1,0,jg);
+      flux_up_top(jlev,0,jg) = flux_up_base(jlev,0,jg) * transmittance(jlev,0,jg)
+	+ source_up(jlev,0,jg);
     }
-    else {
-      flux_dn_base(jlev,__,__) = (transmittance(jlev,__,__) * flux_dn_top(jlev,__,__)
-		 + reflectance(jlev,__,__) * total_source(jlev+1,__,__) + source_dn(jlev,__,__) )
-	/ (1.0 - reflectance(jlev,__,__) * total_albedo(jlev+1,__,__));
-      flux_up_base(jlev,__,__) = total_source(jlev+1,__,__)
-	+ flux_dn_base(jlev,__,__) * total_albedo(jlev+1,__,__);
-      flux_up_top(jlev,__,__) = flux_up_base(jlev,__,__) * transmittance(jlev,__,__)
-	+ source_up(jlev,__,__) + flux_dn_top(jlev,__,__) * reflectance(jlev,__,__);
+    if (!is_clear_sky_layer(jlev)) {
+      for (int jreg = 1; jreg < NREGIONS; ++jreg) {
+	flux_dn_base(jlev,jreg,__) = (transmittance(jlev,jreg,__) * flux_dn_top(jlev,jreg,__)
+	      + reflectance(jlev,jreg-1,__) * total_source(jlev+1,jreg,__) + source_dn(jlev,jreg,__) )
+	  / (1.0 - reflectance(jlev,jreg-1,__) * total_albedo(jlev+1,jreg,__));
+	flux_up_base(jlev,jreg,__) = total_source(jlev+1,jreg,__)
+	  + flux_dn_base(jlev,jreg,__) * total_albedo(jlev+1,jreg,__);
+	flux_up_top(jlev,jreg,__) = flux_up_base(jlev,jreg,__) * transmittance(jlev,jreg,__)
+	  + source_up(jlev,jreg,__) + flux_dn_top(jlev,jreg,__) * reflectance(jlev,jreg-1,__);
+      }
     }
 
     if (jlev < nlev-1) {
