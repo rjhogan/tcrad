@@ -133,8 +133,8 @@ calc_ref_trans_source_lw(int ng,
 	if (config.i_two_stream_scheme == TWO_STREAM_EDDINGTON) {
 	  for (int jg = 0; jg < ng; ++jg) {
 	    // See Meador & Weaver (1980), Table 1; Toon et al. (1989), Table 1
-	    gamma1(jg) = 1.75 - ssa(jlev,jreg,jg) * (1.0 + 0.75*asymmetry(jlev,jg));
-	    gamma2(jg) = ssa(jlev,jreg,jg) * (1.0 - 0.75*asymmetry(jlev,jg) - 0.25);
+	    gamma1(jg) = 1.75 - ssa(jlev,jreg-1,jg) * (1.0 + 0.75*asymmetry(jlev,jg));
+	    gamma2(jg) = ssa(jlev,jreg-1,jg) * (1.0 - 0.75*asymmetry(jlev,jg) - 0.25);
 	  }
 	}
 	else if (config.i_two_stream_scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) {
@@ -142,13 +142,13 @@ calc_ref_trans_source_lw(int ng,
 	    // Wiscombe-Grams backscatter fraction applied to de-scaled
 	    // asymmety factor
 	    factor = 0.5 * (1.0 - 0.75*asymmetry(jlev,jg)/(1.0-asymmetry(jlev,jg)));
-	    gamma1(jg) = lw_diffusivity_cloud * (1.0 - ssa(jlev,jreg,jg)*(1.0-factor));
-	    gamma2(jg) = lw_diffusivity_cloud * ssa(jlev,jreg,jg) * factor;
+	    gamma1(jg) = lw_diffusivity_cloud * (1.0 - ssa(jlev,jreg-1,jg)*(1.0-factor));
+	    gamma2(jg) = lw_diffusivity_cloud * ssa(jlev,jreg-1,jg) * factor;
 	  }
 	}
 	else { // TWO_STREAM_LEGENDRE or TWO_STREAM_ELSASSER
 	  for (int jg = 0; jg < ng; ++jg) {
-	    factor = (lw_diffusivity_cloud * 0.5) * ssa(jlev,jreg,jg);
+	    factor = (lw_diffusivity_cloud * 0.5) * ssa(jlev,jreg-1,jg);
 	    gamma1(jg) = lw_diffusivity_cloud - factor*(1.0 + asymmetry(jlev,jg));
 	    gamma2(jg) = factor * (1.0 - asymmetry(jlev,jg));
 	  }
@@ -303,8 +303,8 @@ calc_radiance_trans_source_lw(int ng, int nlev,
       if (config.i_two_stream_scheme == TWO_STREAM_EDDINGTON) {
 	for (int jg = 0; jg < ng; ++jg) {
 	  // See Meador & Weaver (1980), Table 1; Toon et al. (1989), Table 1
-	  gamma1(jg) = 1.75 - ssa(jlev,jreg,jg) * (1.0 + 0.75*asymmetry(jlev,jg));
-	  gamma2(jg) = ssa(jlev,jreg,jg) * (1.0 - 0.75*asymmetry(jlev,jg) - 0.25);
+	  gamma1(jg) = 1.75 - ssa(jlev,jreg-1,jg) * (1.0 + 0.75*asymmetry(jlev,jg));
+	  gamma2(jg) = ssa(jlev,jreg-1,jg) * (1.0 - 0.75*asymmetry(jlev,jg) - 0.25);
 	}
       }
       else if (config.i_two_stream_scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) {
@@ -312,13 +312,13 @@ calc_radiance_trans_source_lw(int ng, int nlev,
 	  // Wiscombe-Grams backscatter fraction applied to de-scaled
 	  // asymmety factor
 	  factor = 0.5 * (1.0 - 0.75*asymmetry(jlev,jg)/(1.0-asymmetry(jlev,jg)));
-	  gamma1(jg) = lw_diffusivity * (1.0 - ssa(jlev,jreg,jg)*(1.0-factor));
-	  gamma2(jg) = lw_diffusivity * ssa(jlev,jreg,jg) * factor;
+	  gamma1(jg) = lw_diffusivity * (1.0 - ssa(jlev,jreg-1,jg)*(1.0-factor));
+	  gamma2(jg) = lw_diffusivity * ssa(jlev,jreg-1,jg) * factor;
 	}
       }
       else { // TWO_STREAM_LEGENDRE or TWO_STREAM_ELSASSER
 	for (int jg = 0; jg < ng; ++jg) {
-	  factor = (lw_diffusivity * 0.5) * ssa(jlev,jreg,jg);
+	  factor = (lw_diffusivity * 0.5) * ssa(jlev,jreg-1,jg);
 	  gamma1(jg) = lw_diffusivity - factor*(1.0 + asymmetry(jlev,jg));
 	  gamma2(jg) = factor * (1.0 - asymmetry(jlev,jg));
 	}
@@ -364,13 +364,13 @@ calc_radiance_trans_source_lw(int ng, int nlev,
 	      // fluxes due to internal emission and having a linear
 	      // structure
 	      (1.0 - transmittance(jlev,jreg,jg))
-	      * (0.5*ssa(jlev,jreg,jg)*planck_prime*(p_same-p_opposite)
+	      * (0.5*ssa(jlev,jreg-1,jg)*planck_prime*(p_same-p_opposite)
 		 /(gamma1(jg)+gamma2(jg)) + planck_prime*mu)
 	      + planck_top(jreg,jg)
 	      -planck_base(jreg,jg)*transmittance(jlev,jreg,jg)
 	      // Scattering from the exponential part of the flux,
 	      // whether caused by external or internal sources
-	      + 0.5*ssa(jlev,jreg,jg)
+	      + 0.5*ssa(jlev,jreg-1,jg)
 	      * (p_same * ((gamma1(jg)+k_exponent(jg))*scaling1*c1
 			   + gamma2(jg)*scaling2*c2)
 		 + p_opposite * (gamma2(jg)*scaling1*c1
@@ -383,13 +383,13 @@ calc_radiance_trans_source_lw(int ng, int nlev,
 	      // fluxes due to internal emission and having a linear
 	      // structure
 	      -(1.0 - transmittance(jlev,jreg,jg))
-	      * (0.5*ssa(jlev,jreg,jg)*planck_prime*(p_same-p_opposite)
+	      * (0.5*ssa(jlev,jreg-1,jg)*planck_prime*(p_same-p_opposite)
 		 /(gamma1(jg)+gamma2(jg)) + planck_prime*mu)
 	      + planck_base(jreg,jg)
 	      -planck_top(jreg,jg)*transmittance(jlev,jreg,jg)
 	      // Scattering from the exponential part of the flux,
 	      // whether caused by external or internal sources
-	      + 0.5*ssa(jlev,jreg,jg)
+	      + 0.5*ssa(jlev,jreg-1,jg)
 	      * (p_opposite * ((gamma1(jg)+k_exponent(jg))*scaling2*c1
 			   + gamma2(jg)*scaling1*c2)
 		 + p_same * (gamma2(jg)*scaling2*c1

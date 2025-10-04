@@ -36,7 +36,7 @@ solver_tripleclouds_lw(int ng,
 		       const Array<3,IsActive>& u_overlap,    // (nlev+1,nreg,nreg)
 		       const Array<3,IsActive>& v_overlap,    // (nlev+1,nreg,nreg)
 		       const Array<3,IsActive>& od,           // (nlev,nreg,ng)
-		       const Array<3,IsActive>& ssa,          // (nlev,nreg,ng)
+		       const Array<3,IsActive>& ssa,          // (nlev,nreg-1,ng)
 		       const Array<2,IsActive>& asymmetry,    // (nlev,ng)
 		       const Array<2,IsActive>& planck_hl,    // (nlev+1,ng)
 		       const Array<1,IsActive>& surf_emission,// (ng)
@@ -116,7 +116,7 @@ solver_tripleclouds_lw(int ng,
     if (!is_clear_sky_layer(jlev)) {
       // Cloudy sky
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
-	calc_ref_trans_source_layer_lw(ng, config, od(jlev,jreg,__), ssa(jlev,jreg,__), asymmetry(jlev,__),
+	calc_ref_trans_source_layer_lw(ng, config, od(jlev,jreg,__), ssa(jlev,jreg-1,__), asymmetry(jlev,__),
 				 planck_hl(jlev,__), planck_hl(jlev+1,__),
 				 reflectance(jlev,jreg-1,__), transmittance(jlev,jreg,__),
 				 source_up(jlev,jreg,__), source_dn(jlev,jreg,__));
@@ -330,7 +330,7 @@ tcrad::solver_tripleclouds_lw<false>(int ng,
 				     const Array<3,false>& u_overlap,    // (nlev+1,nreg,nreg)
 				     const Array<3,false>& v_overlap,    // (nlev+1,nreg,nreg)
 				     const Array<3,false>& od,           // (nlev,nreg,ng)
-				     const Array<3,false>& ssa,          // (nlev,nreg,ng)
+				     const Array<3,false>& ssa,          // (nlev,nreg-1,ng)
 				     const Array<2,false>& asymmetry,    // (nlev,ng)
 				     const Array<2,false>& planck_hl,    // (nlev+1,ng)
 				     const Array<1,false>& surf_emission,// (ng)
@@ -351,7 +351,7 @@ tcrad::solver_tripleclouds_lw<true>(int ng,
 				    const Array<3,true>& u_overlap,    // (nlev+1,nreg,nreg)
 				    const Array<3,true>& v_overlap,    // (nlev+1,nreg,nreg)
 				    const Array<3,true>& od,           // (nlev,nreg,ng)
-				    const Array<3,true>& ssa,          // (nlev,nreg,ng)
+				    const Array<3,true>& ssa,          // (nlev,nreg-1,ng)
 				    const Array<2,true>& asymmetry,    // (nlev,ng)
 				    const Array<2,true>& planck_hl,    // (nlev+1,ng)
 				    const Array<1,true>& surf_emission,// (ng)

@@ -60,9 +60,10 @@ void calc_tripleclouds_flux_lw(int ng,
 
   // Merged clear+cloudy optical properties, noting that the asymmetry
   // factor in the cloudy region equals that of the cloud since there
-  // is no air/aerosol scattering
+  // is no air/aerosol scattering, and also ssa is only non-zero in
+  // the NREGIONS-1 cloudy regions.
   Array<3,IsActive> od(nlev,NREGIONS,ng);
-  Array<3,IsActive> ssa(nlev,NREGIONS,ng);
+  Array<3,IsActive> ssa(nlev,NREGIONS-1,ng);
 
   od(__,0,__) = od_clear;
   for (int jlev = 0; jlev < nlev; ++jlev) {
@@ -72,7 +73,7 @@ void calc_tripleclouds_flux_lw(int ng,
       for (int jreg = 1; jreg < NREGIONS; ++jreg) {
 	od(jlev,jreg,__) = od_clear(jlev,__)
 	  + od_scaling(jlev,jreg) * od_cloud(jlev,__);
-	ssa(jlev,jreg,__) = ssa_cloud(jlev,__)
+	ssa(jlev,jreg-1,__) = ssa_cloud(jlev,__)
 	  * od_cloud(jlev,__) * od_scaling(jlev,jreg)
 	  / od(jlev,jreg,__);
       }
