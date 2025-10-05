@@ -1,5 +1,6 @@
 lib_LTLIBRARIES = libTCrad.la
 libTCrad_la_SOURCES = \
+	tcrad_adept.cpp \
 	tcrad_adept.hpp \
 	tcrad_overlap.cpp \
 	tcrad_overlap.hpp \
@@ -16,7 +17,13 @@ libTCrad_la_SOURCES = \
 	tcrad_radiance_lw_f90.cpp \
 	tcrad_flux_lw.cpp \
 	tcrad_flux_lw.hpp \
-	tcrad_flux_lw_f90.cpp
+	tcrad_radiance_lw_tl.cpp \
+	tcrad_radiance_lw_tl.hpp \
+	tcrad_radiance_lw_ad.cpp \
+	tcrad_radiance_lw_ad.hpp \
+	tcrad_flux_lw_f90.cpp \
+	tcrad_radiance_lw_tl_f90.cpp \
+	tcrad_radiance_lw_ad_f90.cpp 	
 
 
 #	tcrad_adding_ica_lw.cpp \

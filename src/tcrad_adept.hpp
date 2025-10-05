@@ -31,6 +31,7 @@ using adept::range;
 using adept::intVector;
 using adept::boolVector;
 using adept::FortranArray;
+using adept::Stack;
 
 // Working floating-point type, "double" by default but if you compile
 // with ADEPT_REAL_TYPE_SIZE=4 then it will be "float", although in
@@ -43,6 +44,10 @@ using adept::Real;
 // vector.
 template <int NDims, bool IsActive = false>
 using Array = adept::Array<NDims,Real,IsActive>;
+
+// Active array
+template <int NDims>
+using aArray = adept::Array<NDims,Real,true>;
 
 // Fixed size arrays
 template <bool IsActive>
@@ -62,5 +67,13 @@ template <>
 struct scalar<true> {
   typedef adept::aReal type;
 };
+
+// Create and delete Adept stack in current thread
+extern "C" {
+  void tcrad_create_autodiff_engine();
+  void tcrad_delete_autodiff_engine();
+  bool tcrad_autodiff_engine_exists();
+};
+
 
 #endif
