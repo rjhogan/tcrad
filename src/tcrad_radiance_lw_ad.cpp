@@ -21,7 +21,8 @@ namespace tcrad {
 // Longwave "Tripleclouds" solver following Shonk & Hogan (2008) that
 // treats cloud inhomogeneity by dividing each model level into three
 // regions, one clear and two cloudy (with differing optical depth),
-// returning a top-of-atmosphere spectral upwelling radiances.
+// returning a top-of-atmosphere spectral upwelling radiances. This is
+// the adjoint version.
 void calc_tripleclouds_radiance_lw_ad(int ng,
 				      int nlev,
 				      const Config& config,
@@ -36,9 +37,9 @@ void calc_tripleclouds_radiance_lw_ad(int ng,
 				      const Array<2>& ssa_cloud,
 				      const Array<2>& asymmetry_cloud,
 				      const Array<1>& overlap_param,
-				      Array<1> radiance,
-				      const Array<1>& radiance_ad,
-				      Array<1> surf_emission_ad,
+				      Array<1> radiance, // Output radiance
+				      const Array<1>& radiance_ad, // Input adjoint
+				      Array<1> surf_emission_ad, // Output adjoints...
 				      Array<1> surf_albedo_ad,
 				      Array<2> planck_hl_ad,
 				      Array<1> cloud_fraction_ad,
@@ -48,11 +49,15 @@ void calc_tripleclouds_radiance_lw_ad(int ng,
 				      Array<2> asymmetry_cloud_ad,
 				      Array<1> overlap_param_ad) {
 
+  // Create an Adept Stack if one does not exist in this thread
+  // already, and get a reference to it (ADEPT_ACTIVE_STACK is a
+  // pointer to the thread-local global variable)
   tcrad_create_autodiff_engine();
   Stack& stack = *ADEPT_ACTIVE_STACK;
 
   // Create active versions of each input array that link to the
-  // existing data
+  // existing data; note that this does not conserve constness, so
+  // don't change the contents of these arrays.
   aArray<1> surf_emission_active(surf_emission);
   aArray<1> surf_albedo_active(surf_albedo);
   aArray<2> planck_hl_active(planck_hl);
@@ -63,22 +68,29 @@ void calc_tripleclouds_radiance_lw_ad(int ng,
   aArray<2> asymmetry_cloud_active(asymmetry_cloud);
   aArray<1> overlap_param_active(overlap_param);
 
+  // Start recording differential statements
   stack.new_recording();
 
   aArray<1> radiance_active(ng);
-  
+
+  // Call the radiance model
   calc_tripleclouds_radiance_lw(ng, nlev, config, mu,
 				surf_emission_active, surf_albedo_active,
 				planck_hl_active, cloud_fraction_active,
 				fractional_std, od_clear_active,
 				od_cloud_active, ssa_cloud_active, asymmetry_cloud_active,
 				overlap_param_active, radiance_active);
+
+  // Extract inactive array from the result
   radiance = value(radiance_active);
-  
+
+  // Set the adjoint of the radiance to the value provided by the user
   radiance_active.set_gradient(radiance_ad);
 
+  // Reverse pass through the differential statements
   stack.compute_adjoint();
 
+  // Save the output adjoints requested by the user
   if (!surf_emission_ad.empty())
     surf_emission_ad   = surf_emission_active.get_gradient();
   if (!surf_albedo_ad.empty())
@@ -98,7 +110,6 @@ void calc_tripleclouds_radiance_lw_ad(int ng,
   if (!overlap_param_ad.empty())
     overlap_param_ad   = overlap_param_active.get_gradient();
   
-
 }
   
 };

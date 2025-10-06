@@ -18,7 +18,11 @@
 namespace tcrad {
   
 // ---------------------------------------------------------------------
-// Tangent-linear of longwave radiance model
+// Longwave "Tripleclouds" solver following Shonk & Hogan (2008) that
+// treats cloud inhomogeneity by dividing each model level into three
+// regions, one clear and two cloudy (with differing optical depth),
+// returning a top-of-atmosphere spectral upwelling radiances. This is
+// the tangent-linear version.
 void calc_tripleclouds_radiance_lw_tl(int ng,
 				      int nlev,
 				      const Config& config,
@@ -45,7 +49,9 @@ void calc_tripleclouds_radiance_lw_tl(int ng,
 				      const Array<1>& overlap_param_tl,
 				      Array<1> radiance_tl) {
 
-  // Get the currenty active stack on this thread from global variable
+  // Create an Adept Stack if one does not exist in this thread
+  // already, and get a reference to it (ADEPT_ACTIVE_STACK is a
+  // pointer to the thread-local global variable)
   tcrad_create_autodiff_engine();
   Stack& stack = *ADEPT_ACTIVE_STACK;
 
@@ -67,7 +73,7 @@ void calc_tripleclouds_radiance_lw_tl(int ng,
 
   aArray<1> radiance_active(ng);
   
-  // Run the algorithm
+  // Call the radiance model
   calc_tripleclouds_radiance_lw(ng, nlev, config, mu,
 				surf_emission_active, surf_albedo_active,
 				planck_hl_active, cloud_fraction_active,
