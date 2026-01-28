@@ -134,7 +134,7 @@ calc_ref_trans_source_lw(int ng,
 	  for (int jg = 0; jg < ng; ++jg) {
 	    // See Meador & Weaver (1980), Table 1; Toon et al. (1989), Table 1
 	    gamma1(jg) = 1.75 - ssa(jlev,jreg-1,jg) * (1.0 + 0.75*asymmetry(jlev,jg));
-	    gamma2(jg) = ssa(jlev,jreg-1,jg) * (1.0 - 0.75*asymmetry(jlev,jg) - 0.25);
+	    gamma2(jg) = ssa(jlev,jreg-1,jg) * (1.0 - 0.75*asymmetry(jlev,jg)) - 0.25;
 	  }
 	}
 	else if (config.i_two_stream_scheme == TWO_STREAM_SCALED_WISCOMBE_GRAMS) {

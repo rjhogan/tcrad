@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COMPILER=intel
+#COMPILER=intel
 COMPILER=gcc
 
 set -ex
@@ -20,7 +20,8 @@ fi
 # Compile options
 
 # Default (optimized) settings
-CXXFLAGS="-Wall -g -O3 -march=native -std=c++11 -DADEPT_FAST_EXPONENTIAL -fopenmp"
+#CXXFLAGS="-Wall -g -O3 -march=native -std=c++11 -DADEPT_FAST_EXPONENTIAL -fopenmp"
+CXXFLAGS="-Wall -g -O3 -march=native -std=c++11 -fopenmp"
 
 # Optimized but with checking
 #CXXFLAGS="-Wall -g -O2 -march=native -std=c++11 -DADEPT_BOUNDS_CHECKING -DADEPT_INIT_REAL_SNAN"
@@ -43,7 +44,8 @@ ADEPT_FLAGS="--with-adept=$ADEPT_DIR"
 #LDFLAGS=-Wl,-rpath,/usr/local/apps/szip/2.1/LP64/lib64
 
 # Set install location
-INSTALL_DIR=/home/parr/apps/tcrad-0.3-gcc14.2.0
+INSTALL_DIR=/home/parr/apps/tcrad-0.3.1-gcc14.2.0
+#INSTALL_DIR=/home/parr/apps/tcrad-0.3-intel
 
 # Call configure script
 ./configure --prefix "$INSTALL_DIR" "CXXFLAGS=$CXXFLAGS" $ADEPT_FLAGS $@

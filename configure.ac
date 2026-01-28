@@ -4,7 +4,7 @@
 AC_PREREQ([2.63])
 
 # Remember to update the version number for a new release
-AC_INIT([TCRAD], [0.3], [r.j.hogan@ecmwf.int],[tcrad])
+AC_INIT([TCRAD], [0.3.1], [r.j.hogan@ecmwf.int],[tcrad])
 
 # Most code is C++ but there is some C and some Fortran
 AC_LANG([C++])

@@ -90,6 +90,9 @@ void calc_tripleclouds_radiance_lw_ad(int ng,
   // Reverse pass through the differential statements
   stack.compute_adjoint();
 
+  //std::cerr << "Memory: " << stack.memory () << " bytes " << ng << " " << nlev << "\n";
+  //std::cerr << stack  << "\n";
+  
   // Save the output adjoints requested by the user
   if (!surf_emission_ad.empty())
     surf_emission_ad   = surf_emission_active.get_gradient();
