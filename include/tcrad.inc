@@ -55,7 +55,6 @@ interface
   ! ---------------------------------------------------------------------
   ! Returns true if an automatic differentiation engine exists in the
   ! current thread.
-
   function tcrad_autodiff_engine_exists() bind(c)
     use iso_c_binding
     logical(c_bool) :: tcrad_autodiff_engine_exists
@@ -66,7 +65,7 @@ interface
   ! treats cloud inhomogeneity by dividing each model level into three
   ! regions, one clear and two cloudy (with differing optical depth),
   ! returning a profile of upwelling and downwelling spectral fluxes.
-  subroutine tcrad_flux_lw(ng, nlev, config, &
+  subroutine tcrad_flux_lw(nspec, nlev, config, &
        &     surf_emission, surf_albedo, &
        &     planck_hl, cloud_fraction, fractional_std, &
        &     od_clear, od_cloud, ssa_cloud, asymmetry_cloud, &
@@ -77,14 +76,23 @@ interface
 
     import :: tcrad_config
 
-    integer(c_int),   value      :: ng, nlev
+    ! Number of spectral intervals and levels
+    integer(c_int),   value      :: nspec, nlev
+    ! Configuration structure defined above
     type(tcrad_config),intent(in):: config
-    real(c_double),   intent(in) :: surf_emission(:), surf_albedo(:)
+    ! Surface emission (flux up through a horizontal plane) and albedo, dimensioned (nspec)
+    real(c_double),   intent(in) :: surf_emission(:), surf_albedo(:) 
+    ! Planck function as a flux through a horizontal plane, dimensioned (nspec,nlev+1)
     real(c_double),   intent(in) :: planck_hl(:,:)
+    ! Cloud fraction and fractional standard deviation of in-cloud optical depth, (nlev)
     real(c_double),   intent(in) :: cloud_fraction(:), fractional_std(:)
+    ! Optical depth of clear sky, and of cloud particles averaged over cloudy part of gridbox, (nspec,nlev)
     real(c_double),   intent(in) :: od_clear(:,:), od_cloud(:,:)
+    ! Single-scattering albedo and asymmetry parameter of cloud particles, (nspec,nlev)
     real(c_double),   intent(in) :: ssa_cloud(:,:), asymmetry_cloud(:,:)
+    ! Cloud overlap parameter, between 1 (maximum) and 0 (random) at layer interfaces, (nlev-1)
     real(c_double),   intent(in) :: overlap_param(:)
+    ! Output upwelling and downwelling fluxes at layer interfaces including top and bottom, (nspec,nlev+1)
     real(c_double),   intent(out):: flux_up(:,:), flux_dn(:,:)
     
   end subroutine tcrad_flux_lw
@@ -94,7 +102,7 @@ interface
   ! treats cloud inhomogeneity by dividing each model level into three
   ! regions, one clear and two cloudy (with differing optical depth),
   ! returning a top-of-atmosphere spectral upwelling radiances.
-  subroutine tcrad_radiance_lw(ng, nlev, config, &
+  subroutine tcrad_radiance_lw(nspec, nlev, config, &
        &     mu, surf_emission, surf_albedo, &
        &     planck_hl, cloud_fraction, fractional_std, &
        &     od_clear, od_cloud, ssa_cloud, asymmetry_cloud, &
@@ -104,16 +112,26 @@ interface
     use iso_c_binding
 
     import :: tcrad_config
-    
-    integer(c_int), value        :: ng, nlev
+
+    ! Number of spectral intervals and levels
+    integer(c_int), value        :: nspec, nlev
+    ! Configuration structure defined above
     type(tcrad_config),intent(in):: config
+    ! Cosine of sensor zenith angle
     real(c_double), value        :: mu
+    ! Surface emission (flux up through a horizontal plane) and albedo, dimensioned (nspec)
     real(c_double), intent(in)   :: surf_emission(:), surf_albedo(:)
+    ! Planck function as a flux through a horizontal plane, dimensioned (nspec,nlev+1)
     real(c_double), intent(in)   :: planck_hl(:,:)
+    ! Cloud fraction and fractional standard deviation of in-cloud optical depth, (nlev)
     real(c_double), intent(in)   :: cloud_fraction(:), fractional_std(:)
+    ! Optical depth of clear sky, and of cloud particles averaged over cloudy part of gridbox, (nspec,nlev)
     real(c_double), intent(in)   :: od_clear(:,:), od_cloud(:,:)
+    ! Single-scattering albedo and asymmetry parameter of cloud particles, (nspec,nlev)
     real(c_double), intent(in)   :: ssa_cloud(:,:), asymmetry_cloud(:,:)
+    ! Cloud overlap parameter, between 1 (maximum) and 0 (random) at layer interfaces, (nlev-1)
     real(c_double), intent(in)   :: overlap_param(:)
+    ! Output radiance, dimensioned (nspec)
     real(c_double), intent(out)  :: radiance(:)
     
   end subroutine tcrad_radiance_lw
@@ -123,10 +141,66 @@ interface
   ! treats cloud inhomogeneity by dividing each model level into three
   ! regions, one clear and two cloudy (with differing optical depth),
   ! returning a top-of-atmosphere spectral upwelling radiances. This
+  ! version takes as input also the tangent-linears of the inputs and
+  ! returns also the tangent-linear of the output (note that
+  ! derivatives with respect to fractional_std are currently not
+  ! computed).
+  subroutine tcrad_radiance_lw_tl(nspec, nlev, config, mu, &
+       &     surf_emission, surf_albedo, &
+       &     planck_hl, cloud_fraction, fractional_std, &
+       &     od_clear, od_cloud, ssa_cloud, asymmetry_cloud, &
+       &     overlap_param, &
+       &     radiance, &
+       &     surf_emission_tl, surf_albedo_tl, &
+       &     planck_hl_tl, cloud_fraction_tl, &
+       &     od_clear_tl, od_cloud_tl, ssa_cloud_tl, asymmetry_cloud_tl, &
+       &     overlap_param_tl, radiance_tl) bind(c)
+
+    use iso_c_binding
+
+    import :: tcrad_config
+    
+    ! Number of spectral intervals and levels
+    integer(c_int), value        :: nspec, nlev
+    ! Configuration structure defined above
+    type(tcrad_config),intent(in):: config
+    ! Cosine of sensor zenith angle
+    real(c_double), value        :: mu
+    ! Surface emission (flux up through a horizontal plane) and albedo, dimensioned (nspec)
+    real(c_double), intent(in)   :: surf_emission(:), surf_albedo(:)
+    ! Planck function as a flux through a horizontal plane, dimensioned (nspec,nlev+1)
+    real(c_double), intent(in)   :: planck_hl(:,:)
+    ! Cloud fraction and fractional standard deviation of in-cloud optical depth, (nlev)
+    real(c_double), intent(in)   :: cloud_fraction(:), fractional_std(:)
+    ! Optical depth of clear sky, and of cloud particles averaged over cloudy part of gridbox, (nspec,nlev)
+    real(c_double), intent(in)   :: od_clear(:,:), od_cloud(:,:)
+    ! Single-scattering albedo and asymmetry parameter of cloud particles, (nspec,nlev)
+    real(c_double), intent(in)   :: ssa_cloud(:,:), asymmetry_cloud(:,:)
+    ! Cloud overlap parameter, between 1 (maximum) and 0 (random) at layer interfaces, (nlev-1)
+    real(c_double), intent(in)   :: overlap_param(:)
+    ! Output radiance, dimensioned (nspec)
+    real(c_double), intent(out)  :: radiance(:)
+    ! Input tangent-linear of the various input variables, dimensioned as the inputs
+    real(c_double), intent(out)  :: surf_emission_tl(:), surf_albedo_tl(:)
+    real(c_double), intent(out)  :: planck_hl_tl(:,:)
+    real(c_double), intent(out)  :: cloud_fraction_tl(:)
+    real(c_double), intent(out)  :: od_clear_tl(:,:), od_cloud_tl(:,:)
+    real(c_double), intent(out)  :: ssa_cloud_tl(:,:), asymmetry_cloud_tl(:,:)
+    real(c_double), intent(out)  :: overlap_param_tl(:)
+    ! Output radiance tangent-linear, dimensioned (nspec)
+    real(c_double), intent(in)   :: radiance_tl(:)
+   
+  end subroutine tcrad_radiance_lw_tl
+
+  ! ---------------------------------------------------------------------
+  ! Longwave "Tripleclouds" solver following Shonk & Hogan (2008) that
+  ! treats cloud inhomogeneity by dividing each model level into three
+  ! regions, one clear and two cloudy (with differing optical depth),
+  ! returning a top-of-atmosphere spectral upwelling radiances. This
   ! version takes as input also the adjoint of the radiance and
   ! returns the adjoint of the active inpus (note that derivatives
   ! with respect to fractional_std are currently not computed).
-  subroutine tcrad_radiance_lw_ad(ng, nlev, config, mu, &
+  subroutine tcrad_radiance_lw_ad(nspec, nlev, config, mu, &
        &     surf_emission, surf_albedo, &
        &     planck_hl, cloud_fraction, fractional_std, &
        &     od_clear, od_cloud, ssa_cloud, asymmetry_cloud, &
@@ -142,17 +216,29 @@ interface
 
     import :: tcrad_config
     
-    integer(c_int), value        :: ng, nlev
+    ! Number of spectral intervals and levels
+    integer(c_int), value        :: nspec, nlev
+    ! Configuration structure defined above
     type(tcrad_config),intent(in):: config
+    ! Cosine of sensor zenith angle
     real(c_double), value        :: mu
+    ! Surface emission (flux up through a horizontal plane) and albedo, dimensioned (nspec)
     real(c_double), intent(in)   :: surf_emission(:), surf_albedo(:)
+    ! Planck function as a flux through a horizontal plane, dimensioned (nspec,nlev+1)
     real(c_double), intent(in)   :: planck_hl(:,:)
+    ! Cloud fraction and fractional standard deviation of in-cloud optical depth, (nlev)
     real(c_double), intent(in)   :: cloud_fraction(:), fractional_std(:)
+    ! Optical depth of clear sky, and of cloud particles averaged over cloudy part of gridbox, (nspec,nlev)
     real(c_double), intent(in)   :: od_clear(:,:), od_cloud(:,:)
+    ! Single-scattering albedo and asymmetry parameter of cloud particles, (nspec,nlev)
     real(c_double), intent(in)   :: ssa_cloud(:,:), asymmetry_cloud(:,:)
+    ! Cloud overlap parameter, between 1 (maximum) and 0 (random) at layer interfaces, (nlev-1)
     real(c_double), intent(in)   :: overlap_param(:)
+    ! Output radiance, dimensioned (nspec)
     real(c_double), intent(out)  :: radiance(:)
+    ! Input radiance adjoint, dimensioned (nspec)
     real(c_double), intent(in)   :: radiance_ad(:)
+    ! Output adjoints of the various input variables, dimensioned as the inputs
     real(c_double), intent(out)  :: surf_emission_ad(:), surf_albedo_ad(:)
     real(c_double), intent(out)  :: planck_hl_ad(:,:)
     real(c_double), intent(out)  :: cloud_fraction_ad(:)

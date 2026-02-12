@@ -1,20 +1,26 @@
 #!/bin/bash
 
+# Script to configure the compilation of this package at ECMWF
+
+# Use the intel compiler for compatibility with the IFS
 #COMPILER=intel
 COMPILER=gcc
 
 set -ex
 
+# Note that these modules will need to be loaded before running "make"
 if [ $COMPILER = intel ]
 then
-  module load prgenv/intel
-  module load intel/2021.4.0
-  module load intel-mpi/2021.4.0
-  module load intel-mkl/19.0.5
-  module load netcdf4/4.7.4
-  module load hdf5/1.10.6
+    module load prgenv/intel
+    module load intel/2021.4.0
+    module load intel-mpi/2021.4.0
+    module load intel-mkl/19.0.5
+    module load netcdf4/4.7.4
+    module load hdf5/1.10.6
+    COMPILER_SUFFIX=intel
 else
     module swap gcc/14.2.0
+    COMPILER_SUFFIX=gcc14.2.0
 fi
 
 # Compile options
@@ -32,20 +38,12 @@ CXXFLAGS="-Wall -g -O3 -march=native -std=c++11 -fopenmp"
 #CXXFLAGS="-Wall -g -O0 -march=native -std=c++11 -DADEPT_BOUNDS_CHECKING -fopenmp"
 
 # Location of Adept automatic differentiation library
-#ADEPT_VER=adept-2.1.3-intel
-ADEPT_VER=adept-2.1.3-gcc14.2.0
+ADEPT_VER=adept-2.1.3-$COMPILER_SUFFIX
 ADEPT_DIR=/home/parr/apps/$ADEPT_VER
 ADEPT_FLAGS="--with-adept=$ADEPT_DIR"
 
-# Location of NetCDF-4 library
-#module load netcdf4
-#NETCDF_FLAGS="--with-netcdf=$NETCDF4_DIR"
-
-#LDFLAGS=-Wl,-rpath,/usr/local/apps/szip/2.1/LP64/lib64
-
 # Set install location
-INSTALL_DIR=/home/parr/apps/tcrad-0.3.1-gcc14.2.0
-#INSTALL_DIR=/home/parr/apps/tcrad-0.3-intel
+INSTALL_DIR=/home/parr/apps/tcrad-0.3.1-$COMPILER_SUFFIX
 
 # Call configure script
 ./configure --prefix "$INSTALL_DIR" "CXXFLAGS=$CXXFLAGS" $ADEPT_FLAGS $@
